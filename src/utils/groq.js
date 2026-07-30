@@ -8,11 +8,6 @@ async function callGroq(apiKey, model, messages, jsonMode = true) {
     max_tokens: 4096,
   }
 
-  // Disable thinking mode for qwen models (interferes with JSON output)
-  if (model.includes('qwen')) {
-    body.chat_template_kwargs = { enable_thinking: false }
-  }
-
   const res = await fetch(GROQ_API_URL, {
     method: 'POST',
     headers: {
