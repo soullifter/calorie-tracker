@@ -3,7 +3,7 @@ import { GROQ_VISION_MODEL, GROQ_TEXT_MODEL, GROQ_API_URL } from './constants'
 async function callGroq(apiKey, model, messages, jsonMode = true) {
   // Prepend system message to suppress thinking and get direct JSON
   const allMessages = [
-    { role: 'system', content: 'You are a nutrition analysis assistant. Respond with JSON only. Do NOT include any thinking, reasoning, or explanation — output the JSON object directly. No <think> tags.' },
+    { role: 'system', content: 'Respond with valid JSON only. No thinking, no explanation, no markdown. Output the JSON object directly.' },
     ...messages,
   ]
 
@@ -71,36 +71,7 @@ export async function analyzeNutritionLabel(apiKey, imageBase64) {
       content: [
         {
           type: 'text',
-          text: `Analyze this nutrition label image. Extract ALL nutritional information and return JSON in this exact format:
-{
-  "name": "food product name if visible, otherwise describe the food",
-  "servingSize": "serving size exactly as shown on label (e.g. '1 cup (240ml)' or '2 cookies (30g)')",
-  "servingWeightG": number or null (the weight in grams of one serving, e.g. 30 for '30g' or 240 for '1 cup (240g)'),
-  "servingVolumeML": number or null (the volume in ml if applicable, e.g. 240 for '1 cup (240ml)'),
-  "servingUnit": "the unit type: 'g', 'ml', 'oz', 'pieces', or 'serving'",
-  "servingUnitAmount": number (how many grams/ml/oz/pieces in one serving),
-  "nutrients": {
-    "calories": number,
-    "protein": number (grams),
-    "carbs": number (grams),
-    "fat": number (grams),
-    "saturatedFat": number (grams) or null,
-    "transFat": number (grams) or null,
-    "polyunsaturatedFat": number (grams) or null,
-    "monounsaturatedFat": number (grams) or null,
-    "fiber": number (grams) or null,
-    "sugar": number (grams) or null,
-    "sodium": number (mg) or null,
-    "cholesterol": number (mg) or null,
-    "potassium": number (mg) or null,
-    "calcium": number (mg) or null,
-    "iron": number (mg) or null,
-    "vitaminA": number (mcg) or null,
-    "vitaminC": number (mg) or null,
-    "vitaminD": number (mcg) or null
-  }
-}
-All nutrient values should be per serving. Use numbers only, no units in values. If a nutrient is not visible on the label, use null. For servingWeightG, convert oz to grams if needed (1 oz = 28.35g).`,
+          text: `Extract nutrition from this label. Return JSON: {"name":"str","servingSize":"str","servingWeightG":num_or_null,"servingUnit":"g|ml|oz|pieces|serving","servingUnitAmount":num,"nutrients":{"calories":num,"protein":num,"carbs":num,"fat":num,"saturatedFat":num_or_null,"transFat":num_or_null,"polyunsaturatedFat":num_or_null,"monounsaturatedFat":num_or_null,"fiber":num_or_null,"sugar":num_or_null,"sodium":num_or_null,"cholesterol":num_or_null,"potassium":num_or_null,"calcium":num_or_null,"iron":num_or_null,"vitaminA":num_or_null,"vitaminC":num_or_null,"vitaminD":num_or_null}}. Values per serving, numbers only, null if not shown.`,
         },
         {
           type: 'image_url',
@@ -120,40 +91,7 @@ export async function analyzeFoodPhoto(apiKey, imageBase64) {
       content: [
         {
           type: 'text',
-          text: `Look at this food photo and identify EACH individual food item visible. For each item, estimate its portion size and nutritional content separately. Return JSON:
-{
-  "items": [
-    {
-      "name": "item name (e.g. 'Scrambled Eggs')",
-      "estimatedServingSize": "your estimate in natural language (e.g. '2 eggs' or '1 bowl (150g)')",
-      "servingWeightG": number (estimated weight in grams of the portion shown),
-      "servingUnit": "g",
-      "servingUnitAmount": number (same as servingWeightG for photo estimates),
-      "nutrients": {
-        "calories": number,
-        "protein": number (grams),
-        "carbs": number (grams),
-        "fat": number (grams),
-        "saturatedFat": number or null,
-        "transFat": number or null,
-        "polyunsaturatedFat": number or null,
-        "monounsaturatedFat": number or null,
-        "fiber": number or null,
-        "sugar": number or null,
-        "sodium": number (mg) or null,
-        "cholesterol": number (mg) or null,
-        "potassium": number (mg) or null,
-        "calcium": number (mg) or null,
-        "iron": number (mg) or null,
-        "vitaminA": number (mcg) or null,
-        "vitaminC": number (mg) or null,
-        "vitaminD": number (mcg) or null
-      },
-      "confidence": "low" | "medium" | "high"
-    }
-  ]
-}
-Return each food item as a separate entry in the items array. Be realistic with estimates. Use numbers only, no units in values.`,
+          text: `Identify each food item in this photo. Return JSON: {"items":[{"name":"str","estimatedServingSize":"str","servingWeightG":num,"servingUnit":"g","servingUnitAmount":num,"nutrients":{"calories":num,"protein":num,"carbs":num,"fat":num,"saturatedFat":num_or_null,"transFat":num_or_null,"polyunsaturatedFat":num_or_null,"monounsaturatedFat":num_or_null,"fiber":num_or_null,"sugar":num_or_null,"sodium":num_or_null,"cholesterol":num_or_null,"potassium":num_or_null,"calcium":num_or_null,"iron":num_or_null,"vitaminA":num_or_null,"vitaminC":num_or_null,"vitaminD":num_or_null},"confidence":"low|medium|high"}]}. One entry per food item. Numbers only, null if unknown.`,
         },
         {
           type: 'image_url',

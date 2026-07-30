@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { analyzeNutritionLabel, analyzeFoodPhoto } from '../utils/groq'
+import { analyzeNutritionLabel, analyzeFoodPhoto } from '../utils/ai'
 import { getFoodLibrary, saveFoodToLibrary } from '../utils/storage'
 import { NUTRIENTS } from '../utils/constants'
 
@@ -272,7 +272,7 @@ function MultiItemPicker({ items, onConfirm, onBack }) {
   )
 }
 
-export default function AddFood({ mealType, apiKey, onAdd, onClose }) {
+export default function AddFood({ mealType, keys, onAdd, onClose }) {
   const [mode, setMode] = useState('choose') // choose | history | adjust | multi | added
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -290,6 +290,30 @@ export default function AddFood({ mealType, apiKey, onAdd, onClose }) {
     if (fileRef.current) fileRef.current.value = ''
   }
 
+  const compressImage = (file, maxDim = 768, quality = 0.6) => {
+    return new Promise((resolve) => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        let { width, height } = img
+        if (width > maxDim || height > maxDim) {
+          const ratio = Math.min(maxDim / width, maxDim / height)
+          width = Math.round(width * ratio)
+          height = Math.round(height * ratio)
+        }
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0, width, height)
+        // Get base64 without the data:image/jpeg;base64, prefix
+        const dataUrl = canvas.toDataURL('image/jpeg', quality)
+        resolve(dataUrl.split(',')[1])
+        URL.revokeObjectURL(img.src)
+      }
+      img.src = URL.createObjectURL(file)
+    })
+  }
+
   const handleCapture = async (e, isLabel) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -298,14 +322,10 @@ export default function AddFood({ mealType, apiKey, onAdd, onClose }) {
     setError('')
 
     try {
-      const base64 = await new Promise((resolve) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result.split(',')[1])
-        reader.readAsDataURL(file)
-      })
+      const base64 = await compressImage(file)
 
       if (isLabel) {
-        const result = await analyzeNutritionLabel(apiKey, base64)
+        const result = await analyzeNutritionLabel(keys, base64)
         const food = {
           id: `food_${Date.now()}`,
           name: result.name || 'Unknown Food',
@@ -321,7 +341,7 @@ export default function AddFood({ mealType, apiKey, onAdd, onClose }) {
         setScannedFood(food)
         setMode('adjust')
       } else {
-        const result = await analyzeFoodPhoto(apiKey, base64)
+        const result = await analyzeFoodPhoto(keys, base64)
         const items = (result.items || []).map((item, i) => ({
           id: `food_${Date.now()}_${i}`,
           name: item.name || 'Unknown Item',

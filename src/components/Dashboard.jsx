@@ -139,7 +139,7 @@ export default function Dashboard({ profile, onOpenSettings }) {
               <div className="mt-3">
                 <AddFood
                   mealType={meal}
-                  apiKey={profile.groqApiKey}
+                  keys={{ geminiKey: profile.geminiApiKey, groqKey: profile.groqApiKey }}
                   onAdd={(food) => handleAddFood(meal, food)}
                   onClose={() => setAddingMeal(null)}
                 />
@@ -183,7 +183,7 @@ export default function Dashboard({ profile, onOpenSettings }) {
           {addingExercise ? (
             <div className="mt-3">
               <AddExercise
-                apiKey={profile.groqApiKey}
+                keys={{ geminiKey: profile.geminiApiKey, groqKey: profile.groqApiKey }}
                 weightKg={profile.weightKg}
                 onAdd={handleAddExercise}
                 onClose={() => setAddingExercise(false)}

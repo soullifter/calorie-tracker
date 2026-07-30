@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { estimateExerciseCalories } from '../utils/groq'
+import { estimateExerciseCalories } from '../utils/ai'
 
 const QUICK_EXERCISES = [
   'Walking', 'Running', 'Cycling', 'Swimming', 'Weight Training',
   'Yoga', 'Jump Rope', 'HIIT', 'Elliptical', 'Stair Climbing',
 ]
 
-export default function AddExercise({ apiKey, weightKg, onAdd, onClose }) {
+export default function AddExercise({ keys, weightKg, onAdd, onClose }) {
   const [exercise, setExercise] = useState('')
   const [duration, setDuration] = useState(30)
   const [loading, setLoading] = useState(false)
@@ -18,7 +18,7 @@ export default function AddExercise({ apiKey, weightKg, onAdd, onClose }) {
     setError('')
 
     try {
-      const result = await estimateExerciseCalories(apiKey, exercise, duration, weightKg)
+      const result = await estimateExerciseCalories(keys, exercise, duration, weightKg)
       onAdd({
         id: `ex_${Date.now()}`,
         exercise: result.exercise || exercise,

@@ -119,15 +119,27 @@ export default function Settings({ profile, onUpdate, onClose }) {
           )}
         </div>
 
-        {/* API Key */}
+        {/* API Keys */}
         <div className="bg-gray-900 rounded-xl p-4 space-y-3">
-          <h3 className="text-white font-medium">Groq API Key</h3>
-          <input
-            type="text"
-            value={form.groqApiKey}
-            onChange={(e) => update('groqApiKey', e.target.value)}
-            className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-700 focus:outline-none font-mono text-sm"
-          />
+          <h3 className="text-white font-medium">API Keys</h3>
+          <div className="space-y-1">
+            <label className="text-sm text-gray-400">Gemini</label>
+            <input
+              type="text"
+              value={form.geminiApiKey || ''}
+              onChange={(e) => update('geminiApiKey', e.target.value)}
+              className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-700 focus:outline-none font-mono text-sm"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm text-gray-400">Groq (optional)</label>
+            <input
+              type="text"
+              value={form.groqApiKey || ''}
+              onChange={(e) => update('groqApiKey', e.target.value)}
+              className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-700 focus:outline-none font-mono text-sm"
+            />
+          </div>
         </div>
 
         {/* Save */}

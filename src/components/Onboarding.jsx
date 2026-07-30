@@ -13,6 +13,7 @@ export default function Onboarding({ onComplete }) {
     weightKg: '',
     targetWeightKg: '',
     activityLevel: 'sedentary',
+    geminiApiKey: '',
     groqApiKey: '',
   })
   const [error, setError] = useState('')
@@ -92,34 +93,57 @@ export default function Onboarding({ onComplete }) {
       </div>
     </div>,
 
-    // Step 2: API Key
-    <div key="api" className="space-y-4">
+    // Step 2: API Keys
+    <div key="api" className="space-y-5">
       <h2 className="text-xl font-semibold text-white">AI Setup</h2>
       <p className="text-sm text-gray-400">
-        We use Groq AI to analyze food photos and nutrition labels. It's free.
+        We use AI to analyze food photos and nutrition labels. Both are free.
       </p>
-      <input
-        type="text"
-        placeholder="Groq API Key"
-        value={form.groqApiKey}
-        onChange={(e) => update('groqApiKey', e.target.value)}
-        className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-700 focus:border-blue-500 focus:outline-none font-mono text-sm"
-      />
-      <a
-        href="https://console.groq.com/keys"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-blue-400 text-sm hover:underline inline-block"
-      >
-        Get a free API key from Groq
-      </a>
+
+      <div className="space-y-2">
+        <label className="text-sm text-gray-300">Google Gemini (for photo analysis)</label>
+        <input
+          type="text"
+          placeholder="Gemini API Key"
+          value={form.geminiApiKey}
+          onChange={(e) => update('geminiApiKey', e.target.value)}
+          className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-700 focus:border-blue-500 focus:outline-none font-mono text-sm"
+        />
+        <a
+          href="https://aistudio.google.com/apikey"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-400 text-sm hover:underline inline-block"
+        >
+          Get free Gemini key
+        </a>
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm text-gray-300">Groq (optional, for faster text tasks)</label>
+        <input
+          type="text"
+          placeholder="Groq API Key (optional)"
+          value={form.groqApiKey}
+          onChange={(e) => update('groqApiKey', e.target.value)}
+          className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-700 focus:border-blue-500 focus:outline-none font-mono text-sm"
+        />
+        <a
+          href="https://console.groq.com/keys"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-400 text-sm hover:underline inline-block"
+        >
+          Get free Groq key
+        </a>
+      </div>
     </div>,
   ]
 
   const canNext = () => {
     if (step === 0) return form.name && form.age && form.heightCm
     if (step === 1) return form.weightKg && form.targetWeightKg
-    if (step === 2) return form.groqApiKey
+    if (step === 2) return form.geminiApiKey
     return false
   }
 

@@ -59,7 +59,3 @@ export const DAILY_RDA = {
   polyunsaturatedFat: 22,
   monounsaturatedFat: 22,
 }
-
-export const GROQ_VISION_MODEL = 'qwen/qwen3.6-27b'
-export const GROQ_TEXT_MODEL = 'llama-3.1-8b-instant'
-export const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
