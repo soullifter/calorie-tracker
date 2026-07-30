@@ -47,9 +47,15 @@ function extractJson(text) {
   // Try to find JSON object in the text
   const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
   if (jsonMatch) {
-    return JSON.parse(jsonMatch[0])
+    try {
+      return JSON.parse(jsonMatch[0])
+    } catch (e) {
+      throw new Error(`JSON parse error: ${e.message}\n\nExtracted: ${jsonMatch[0].slice(0, 300)}`)
+    }
   }
-  throw new Error('Could not parse AI response as JSON')
+  // Show what we got so user can report the issue
+  const preview = cleaned.slice(0, 500) || text.slice(0, 500) || '(empty response)'
+  throw new Error(`Could not find JSON in AI response.\n\nResponse preview: ${preview}`)
 }
 
 export async function analyzeNutritionLabel(apiKey, imageBase64) {

@@ -447,7 +447,11 @@ export default function AddFood({ mealType, apiKey, onAdd, onClose }) {
         <p className="text-sm text-green-400">{addedCount} item{addedCount !== 1 ? 's' : ''} added so far</p>
       )}
 
-      {error && <p className="text-red-400 text-sm">{error}</p>}
+      {error && (
+        <div className="bg-red-900/30 border border-red-800 rounded-lg p-3 max-h-48 overflow-y-auto">
+          <p className="text-red-400 text-sm whitespace-pre-wrap break-all">{error}</p>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-8">
