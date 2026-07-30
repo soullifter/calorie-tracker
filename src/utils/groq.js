@@ -1,11 +1,17 @@
 import { GROQ_VISION_MODEL, GROQ_TEXT_MODEL, GROQ_API_URL } from './constants'
 
 async function callGroq(apiKey, model, messages, jsonMode = true) {
+  // Prepend system message to suppress thinking and get direct JSON
+  const allMessages = [
+    { role: 'system', content: 'You are a nutrition analysis assistant. Respond with JSON only. Do NOT include any thinking, reasoning, or explanation — output the JSON object directly. No <think> tags.' },
+    ...messages,
+  ]
+
   const body = {
     model,
-    messages,
-    temperature: 0.2,
-    max_tokens: 4096,
+    messages: allMessages,
+    temperature: 0.1,
+    max_tokens: 8192,
   }
 
   const res = await fetch(GROQ_API_URL, {
