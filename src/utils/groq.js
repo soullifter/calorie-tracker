@@ -1,23 +1,37 @@
 import { GROQ_VISION_MODEL, GROQ_TEXT_MODEL, GROQ_API_URL } from './constants'
 
 async function callGroq(apiKey, model, messages, jsonMode = true) {
+  const body = {
+    model,
+    messages,
+    temperature: 0.2,
+    max_tokens: 4096,
+  }
+
+  // Disable thinking mode for qwen models (interferes with JSON output)
+  if (model.includes('qwen')) {
+    body.chat_template_kwargs = { enable_thinking: false }
+  }
+
   const res = await fetch(GROQ_API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: 0.2,
-      max_tokens: 2048,
-      ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
-    }),
+    body: JSON.stringify(body),
   })
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
+    // If there's a failed_generation, try to extract JSON from it
+    if (err.error?.failed_generation) {
+      try {
+        return extractJson(err.error.failed_generation)
+      } catch {
+        // fall through to throw
+      }
+    }
     throw new Error(err.error?.message || `Groq API error: ${res.status}`)
   }
 
@@ -25,11 +39,22 @@ async function callGroq(apiKey, model, messages, jsonMode = true) {
   const content = data.choices?.[0]?.message?.content || ''
 
   if (jsonMode) {
-    // Strip markdown code fences if present
-    const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    return JSON.parse(cleaned)
+    return extractJson(content)
   }
   return content
+}
+
+function extractJson(text) {
+  // Strip thinking tags if present
+  let cleaned = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+  // Strip markdown code fences
+  cleaned = cleaned.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  // Try to find JSON object in the text
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
+  if (jsonMatch) {
+    return JSON.parse(jsonMatch[0])
+  }
+  throw new Error('Could not parse AI response as JSON')
 }
 
 export async function analyzeNutritionLabel(apiKey, imageBase64) {
