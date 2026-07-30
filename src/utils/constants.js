@@ -28,6 +28,8 @@ export const NUTRIENTS = [
   { key: 'fat', label: 'Total Fat', unit: 'g' },
   { key: 'saturatedFat', label: 'Saturated Fat', unit: 'g' },
   { key: 'transFat', label: 'Trans Fat', unit: 'g' },
+  { key: 'polyunsaturatedFat', label: 'Polyunsaturated Fat', unit: 'g' },
+  { key: 'monounsaturatedFat', label: 'Monounsaturated Fat', unit: 'g' },
   { key: 'fiber', label: 'Fiber', unit: 'g' },
   { key: 'sugar', label: 'Sugar', unit: 'g' },
   { key: 'sodium', label: 'Sodium', unit: 'mg' },
@@ -54,6 +56,8 @@ export const DAILY_RDA = {
   vitaminD: 15,
   saturatedFat: 22, // ~10% of 2000 cal
   transFat: 0,
+  polyunsaturatedFat: 22,
+  monounsaturatedFat: 22,
 }
 
 export const GROQ_VISION_MODEL = 'qwen/qwen3.6-27b'

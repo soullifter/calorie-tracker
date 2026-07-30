@@ -42,7 +42,11 @@ export async function analyzeNutritionLabel(apiKey, imageBase64) {
           text: `Analyze this nutrition label image. Extract ALL nutritional information and return JSON in this exact format:
 {
   "name": "food product name if visible, otherwise describe the food",
-  "servingSize": "serving size as shown on label (e.g. '1 cup (240ml)' or '30g')",
+  "servingSize": "serving size exactly as shown on label (e.g. '1 cup (240ml)' or '2 cookies (30g)')",
+  "servingWeightG": number or null (the weight in grams of one serving, e.g. 30 for '30g' or 240 for '1 cup (240g)'),
+  "servingVolumeML": number or null (the volume in ml if applicable, e.g. 240 for '1 cup (240ml)'),
+  "servingUnit": "the unit type: 'g', 'ml', 'oz', 'pieces', or 'serving'",
+  "servingUnitAmount": number (how many grams/ml/oz/pieces in one serving),
   "nutrients": {
     "calories": number,
     "protein": number (grams),
@@ -50,6 +54,8 @@ export async function analyzeNutritionLabel(apiKey, imageBase64) {
     "fat": number (grams),
     "saturatedFat": number (grams) or null,
     "transFat": number (grams) or null,
+    "polyunsaturatedFat": number (grams) or null,
+    "monounsaturatedFat": number (grams) or null,
     "fiber": number (grams) or null,
     "sugar": number (grams) or null,
     "sodium": number (mg) or null,
@@ -62,7 +68,7 @@ export async function analyzeNutritionLabel(apiKey, imageBase64) {
     "vitaminD": number (mcg) or null
   }
 }
-All values should be per serving. Use numbers only, no units in values. If a nutrient is not visible on the label, use null.`,
+All nutrient values should be per serving. Use numbers only, no units in values. If a nutrient is not visible on the label, use null. For servingWeightG, convert oz to grams if needed (1 oz = 28.35g).`,
         },
         {
           type: 'image_url',
@@ -87,7 +93,10 @@ export async function analyzeFoodPhoto(apiKey, imageBase64) {
   "items": [
     {
       "name": "item name (e.g. 'Scrambled Eggs')",
-      "estimatedServingSize": "your estimate (e.g. '2 eggs' or '150g')",
+      "estimatedServingSize": "your estimate in natural language (e.g. '2 eggs' or '1 bowl (150g)')",
+      "servingWeightG": number (estimated weight in grams of the portion shown),
+      "servingUnit": "g",
+      "servingUnitAmount": number (same as servingWeightG for photo estimates),
       "nutrients": {
         "calories": number,
         "protein": number (grams),
@@ -95,6 +104,8 @@ export async function analyzeFoodPhoto(apiKey, imageBase64) {
         "fat": number (grams),
         "saturatedFat": number or null,
         "transFat": number or null,
+        "polyunsaturatedFat": number or null,
+        "monounsaturatedFat": number or null,
         "fiber": number or null,
         "sugar": number or null,
         "sodium": number (mg) or null,

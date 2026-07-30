@@ -48,41 +48,102 @@ function FoodHistoryList({ onSelect, onClose }) {
   )
 }
 
+const UNIT_LABELS = { g: 'grams', ml: 'ml', oz: 'oz', pieces: 'pcs', serving: 'servings' }
+const UNIT_STEPS = { g: 10, ml: 10, oz: 0.5, pieces: 1, serving: 0.25 }
+
 function ServingAdjuster({ food, onConfirm, onBack, confirmLabel }) {
+  const hasUnit = food.servingUnit && food.servingUnitAmount
+  const [inputMode, setInputMode] = useState('servings') // 'servings' or 'unit'
   const [servings, setServings] = useState(1)
+  const [unitQty, setUnitQty] = useState(food.servingUnitAmount || 100)
+
+  const unitLabel = hasUnit ? (UNIT_LABELS[food.servingUnit] || food.servingUnit) : 'g'
+  const unitStep = hasUnit ? (UNIT_STEPS[food.servingUnit] || 1) : 10
+
+  // Calculate multiplier based on input mode
+  const multiplier = inputMode === 'servings'
+    ? servings
+    : hasUnit ? unitQty / food.servingUnitAmount : 1
 
   const adjusted = {}
   for (const [key, val] of Object.entries(food.nutrients)) {
-    adjusted[key] = val != null ? Math.round(val * servings * 10) / 10 : null
+    adjusted[key] = val != null ? Math.round(val * multiplier * 10) / 10 : null
   }
 
   return (
     <div className="space-y-4">
       <button onClick={onBack} className="text-gray-400 hover:text-white text-sm">&larr; Back</button>
       <h3 className="text-lg font-semibold text-white">{food.name}</h3>
-      <p className="text-sm text-gray-400">Per serving: {food.servingSize}</p>
+      <p className="text-sm text-gray-400">
+        Per serving: {food.servingSize}
+        {food.servingWeightG && ` (${food.servingWeightG}g)`}
+      </p>
 
-      <div className="space-y-2">
-        <label className="text-sm text-gray-400">How many servings?</label>
-        <div className="flex items-center gap-3">
+      {/* Input mode toggle */}
+      {hasUnit && (
+        <div className="flex rounded-lg overflow-hidden border border-gray-700">
           <button
-            onClick={() => setServings(Math.max(0.25, servings - 0.25))}
-            className="w-10 h-10 rounded-lg bg-gray-800 text-white text-xl hover:bg-gray-700"
-          >-</button>
-          <input
-            type="number"
-            value={servings}
-            onChange={(e) => setServings(Math.max(0.25, parseFloat(e.target.value) || 0.25))}
-            step="0.25"
-            min="0.25"
-            className="w-20 text-center p-2 rounded-lg bg-gray-800 text-white border border-gray-700 focus:outline-none"
-          />
+            onClick={() => setInputMode('servings')}
+            className={`flex-1 py-2 text-sm transition ${
+              inputMode === 'servings' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400'
+            }`}
+          >Servings</button>
           <button
-            onClick={() => setServings(servings + 0.25)}
-            className="w-10 h-10 rounded-lg bg-gray-800 text-white text-xl hover:bg-gray-700"
-          >+</button>
+            onClick={() => setInputMode('unit')}
+            className={`flex-1 py-2 text-sm transition ${
+              inputMode === 'unit' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400'
+            }`}
+          >{unitLabel}</button>
         </div>
-      </div>
+      )}
+
+      {inputMode === 'servings' ? (
+        <div className="space-y-2">
+          <label className="text-sm text-gray-400">How many servings?</label>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setServings(Math.max(0.1, +(servings - 0.25).toFixed(2)))}
+              className="w-10 h-10 rounded-lg bg-gray-800 text-white text-xl hover:bg-gray-700"
+            >-</button>
+            <input
+              type="number"
+              value={servings}
+              onChange={(e) => setServings(Math.max(0.1, parseFloat(e.target.value) || 0.1))}
+              step="0.1"
+              min="0.1"
+              className="w-24 text-center p-2 rounded-lg bg-gray-800 text-white border border-gray-700 focus:outline-none"
+            />
+            <button
+              onClick={() => setServings(+(servings + 0.25).toFixed(2))}
+              className="w-10 h-10 rounded-lg bg-gray-800 text-white text-xl hover:bg-gray-700"
+            >+</button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <label className="text-sm text-gray-400">How much ({unitLabel})?</label>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setUnitQty(Math.max(unitStep, +(unitQty - unitStep).toFixed(1)))}
+              className="w-10 h-10 rounded-lg bg-gray-800 text-white text-xl hover:bg-gray-700"
+            >-</button>
+            <input
+              type="number"
+              value={unitQty}
+              onChange={(e) => setUnitQty(Math.max(1, parseFloat(e.target.value) || 1))}
+              step={unitStep}
+              min="1"
+              className="w-24 text-center p-2 rounded-lg bg-gray-800 text-white border border-gray-700 focus:outline-none"
+            />
+            <button
+              onClick={() => setUnitQty(+(unitQty + unitStep).toFixed(1))}
+              className="w-10 h-10 rounded-lg bg-gray-800 text-white text-xl hover:bg-gray-700"
+            >+</button>
+            <span className="text-gray-400 text-sm">{unitLabel}</span>
+          </div>
+          <p className="text-xs text-gray-500">= {multiplier.toFixed(2)} servings</p>
+        </div>
+      )}
 
       <div className="bg-gray-800 rounded-lg p-4 space-y-2">
         <p className="text-white font-medium">{Math.round(adjusted.calories)} calories</p>
@@ -102,7 +163,7 @@ function ServingAdjuster({ food, onConfirm, onBack, confirmLabel }) {
       </div>
 
       <button
-        onClick={() => onConfirm({ ...food, servings, nutrients: adjusted })}
+        onClick={() => onConfirm({ ...food, servings: multiplier, nutrients: adjusted })}
         className="w-full py-3 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-500 transition"
       >
         {confirmLabel || 'Add to Meal'}
@@ -249,6 +310,10 @@ export default function AddFood({ mealType, apiKey, onAdd, onClose }) {
           id: `food_${Date.now()}`,
           name: result.name || 'Unknown Food',
           servingSize: result.servingSize || '1 serving',
+          servingWeightG: result.servingWeightG || null,
+          servingVolumeML: result.servingVolumeML || null,
+          servingUnit: result.servingUnit || 'serving',
+          servingUnitAmount: result.servingUnitAmount || 1,
           nutrients: result.nutrients,
           source: 'label',
         }
@@ -262,6 +327,9 @@ export default function AddFood({ mealType, apiKey, onAdd, onClose }) {
           name: item.name || 'Unknown Item',
           servingSize: item.estimatedServingSize || '1 serving',
           estimatedServingSize: item.estimatedServingSize || '1 serving',
+          servingWeightG: item.servingWeightG || null,
+          servingUnit: item.servingUnit || 'g',
+          servingUnitAmount: item.servingUnitAmount || item.servingWeightG || 100,
           nutrients: item.nutrients,
           confidence: item.confidence,
           source: 'photo',
