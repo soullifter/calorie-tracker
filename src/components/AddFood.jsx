@@ -1,0 +1,252 @@
+import { useState, useRef } from 'react'
+import { analyzeNutritionLabel, analyzeFoodPhoto } from '../utils/groq'
+import { getFoodLibrary, saveFoodToLibrary } from '../utils/storage'
+import { NUTRIENTS } from '../utils/constants'
+
+function FoodHistoryList({ onSelect, onClose }) {
+  const [search, setSearch] = useState('')
+  const library = getFoodLibrary().sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0))
+  const filtered = library.filter((f) =>
+    f.name.toLowerCase().includes(search.toLowerCase())
+  )
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-white">Food History</h3>
+        <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">&times;</button>
+      </div>
+      <input
+        type="text"
+        placeholder="Search saved foods..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-700 focus:border-blue-500 focus:outline-none"
+      />
+      {filtered.length === 0 ? (
+        <p className="text-gray-500 text-sm text-center py-4">
+          {library.length === 0 ? 'No saved foods yet. Add your first food!' : 'No matches found.'}
+        </p>
+      ) : (
+        <div className="space-y-2 max-h-80 overflow-y-auto">
+          {filtered.map((food) => (
+            <button
+              key={food.id}
+              onClick={() => onSelect(food)}
+              className="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 hover:border-blue-500 text-left transition"
+            >
+              <p className="text-white font-medium">{food.name}</p>
+              <p className="text-xs text-gray-400 mt-1">
+                {food.nutrients.calories} cal | P: {food.nutrients.protein}g | C: {food.nutrients.carbs}g | F: {food.nutrients.fat}g
+              </p>
+              <p className="text-xs text-gray-500">per serving ({food.servingSize})</p>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ServingAdjuster({ food, onConfirm, onBack }) {
+  const [servings, setServings] = useState(1)
+
+  const adjusted = {}
+  for (const [key, val] of Object.entries(food.nutrients)) {
+    adjusted[key] = val != null ? Math.round(val * servings * 10) / 10 : null
+  }
+
+  return (
+    <div className="space-y-4">
+      <button onClick={onBack} className="text-gray-400 hover:text-white text-sm">&larr; Back</button>
+      <h3 className="text-lg font-semibold text-white">{food.name}</h3>
+      <p className="text-sm text-gray-400">Per serving: {food.servingSize}</p>
+
+      <div className="space-y-2">
+        <label className="text-sm text-gray-400">How many servings?</label>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setServings(Math.max(0.25, servings - 0.25))}
+            className="w-10 h-10 rounded-lg bg-gray-800 text-white text-xl hover:bg-gray-700"
+          >-</button>
+          <input
+            type="number"
+            value={servings}
+            onChange={(e) => setServings(Math.max(0.25, parseFloat(e.target.value) || 0.25))}
+            step="0.25"
+            min="0.25"
+            className="w-20 text-center p-2 rounded-lg bg-gray-800 text-white border border-gray-700 focus:outline-none"
+          />
+          <button
+            onClick={() => setServings(servings + 0.25)}
+            className="w-10 h-10 rounded-lg bg-gray-800 text-white text-xl hover:bg-gray-700"
+          >+</button>
+        </div>
+      </div>
+
+      <div className="bg-gray-800 rounded-lg p-4 space-y-2">
+        <p className="text-white font-medium">{Math.round(adjusted.calories)} calories</p>
+        <div className="grid grid-cols-3 gap-2 text-sm">
+          <div className="text-blue-400">P: {adjusted.protein}g</div>
+          <div className="text-yellow-400">C: {adjusted.carbs}g</div>
+          <div className="text-orange-400">F: {adjusted.fat}g</div>
+        </div>
+        {NUTRIENTS.slice(4).map(({ key, label, unit }) =>
+          adjusted[key] != null ? (
+            <div key={key} className="flex justify-between text-xs text-gray-400">
+              <span>{label}</span>
+              <span>{adjusted[key]}{unit}</span>
+            </div>
+          ) : null
+        )}
+      </div>
+
+      <button
+        onClick={() => onConfirm({ ...food, servings, nutrients: adjusted })}
+        className="w-full py-3 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-500 transition"
+      >
+        Add to Meal
+      </button>
+    </div>
+  )
+}
+
+export default function AddFood({ mealType, apiKey, onAdd, onClose }) {
+  const [mode, setMode] = useState('choose') // choose | label | photo | history | adjust
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [scannedFood, setScannedFood] = useState(null)
+  const fileRef = useRef(null)
+
+  const handleCapture = async (e, isLabel) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setLoading(true)
+    setError('')
+
+    try {
+      const base64 = await new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result.split(',')[1])
+        reader.readAsDataURL(file)
+      })
+
+      const result = isLabel
+        ? await analyzeNutritionLabel(apiKey, base64)
+        : await analyzeFoodPhoto(apiKey, base64)
+
+      const food = {
+        id: `food_${Date.now()}`,
+        name: result.name || 'Unknown Food',
+        servingSize: result.servingSize || result.estimatedServingSize || '1 serving',
+        nutrients: result.nutrients,
+        source: isLabel ? 'label' : 'photo',
+      }
+
+      saveFoodToLibrary(food)
+      setScannedFood(food)
+      setMode('adjust')
+    } catch (err) {
+      setError(err.message || 'Failed to analyze image')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleHistorySelect = (food) => {
+    setScannedFood(food)
+    setMode('adjust')
+  }
+
+  const handleConfirm = (foodWithServings) => {
+    onAdd({
+      ...foodWithServings,
+      logId: `log_${Date.now()}`,
+      loggedAt: Date.now(),
+    })
+    onClose()
+  }
+
+  if (mode === 'adjust' && scannedFood) {
+    return (
+      <div className="bg-gray-900 rounded-xl p-5">
+        <ServingAdjuster
+          food={scannedFood}
+          onConfirm={handleConfirm}
+          onBack={() => setMode('choose')}
+        />
+      </div>
+    )
+  }
+
+  if (mode === 'history') {
+    return (
+      <div className="bg-gray-900 rounded-xl p-5">
+        <FoodHistoryList
+          onSelect={handleHistorySelect}
+          onClose={() => setMode('choose')}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-gray-900 rounded-xl p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-white capitalize">Add to {mealType}</h3>
+        <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">&times;</button>
+      </div>
+
+      {error && <p className="text-red-400 text-sm">{error}</p>}
+
+      {loading ? (
+        <div className="text-center py-8">
+          <div className="inline-block w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-gray-400 mt-3 text-sm">Analyzing your food...</p>
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          <button
+            onClick={() => {
+              fileRef.current.dataset.mode = 'label'
+              fileRef.current.click()
+            }}
+            className="p-4 rounded-lg bg-gray-800 border border-gray-700 hover:border-blue-500 text-left transition"
+          >
+            <p className="text-white font-medium">Scan Nutrition Label</p>
+            <p className="text-xs text-gray-400 mt-1">Take a photo of the nutrition facts</p>
+          </button>
+
+          <button
+            onClick={() => {
+              fileRef.current.dataset.mode = 'photo'
+              fileRef.current.click()
+            }}
+            className="p-4 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-left transition"
+          >
+            <p className="text-white font-medium">Snap Food Photo</p>
+            <p className="text-xs text-gray-400 mt-1">AI estimates nutrition from the food itself</p>
+          </button>
+
+          <button
+            onClick={() => setMode('history')}
+            className="p-4 rounded-lg bg-gray-800 border border-gray-700 hover:border-purple-500 text-left transition"
+          >
+            <p className="text-white font-medium">Pick from History</p>
+            <p className="text-xs text-gray-400 mt-1">Re-add a previously logged food</p>
+          </button>
+        </div>
+      )}
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => handleCapture(e, fileRef.current.dataset.mode === 'label')}
+      />
+    </div>
+  )
+}
