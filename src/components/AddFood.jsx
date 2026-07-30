@@ -48,7 +48,7 @@ function FoodHistoryList({ onSelect, onClose }) {
   )
 }
 
-function ServingAdjuster({ food, onConfirm, onBack }) {
+function ServingAdjuster({ food, onConfirm, onBack, confirmLabel }) {
   const [servings, setServings] = useState(1)
 
   const adjusted = {}
@@ -105,18 +105,129 @@ function ServingAdjuster({ food, onConfirm, onBack }) {
         onClick={() => onConfirm({ ...food, servings, nutrients: adjusted })}
         className="w-full py-3 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-500 transition"
       >
-        Add to Meal
+        {confirmLabel || 'Add to Meal'}
+      </button>
+    </div>
+  )
+}
+
+// Multi-item picker from a meal photo — lets you toggle items on/off and adjust each
+function MultiItemPicker({ items, onConfirm, onBack }) {
+  const [selected, setSelected] = useState(() => items.map(() => true))
+  const [servingsMap, setServingsMap] = useState(() => items.map(() => 1))
+
+  const toggleItem = (i) => {
+    setSelected((s) => s.map((v, j) => (j === i ? !v : v)))
+  }
+
+  const updateServings = (i, val) => {
+    setServingsMap((s) => s.map((v, j) => (j === i ? Math.max(0.25, val) : v)))
+  }
+
+  const getAdjusted = (item, servings) => {
+    const adj = {}
+    for (const [key, val] of Object.entries(item.nutrients)) {
+      adj[key] = val != null ? Math.round(val * servings * 10) / 10 : null
+    }
+    return adj
+  }
+
+  const handleConfirm = () => {
+    const foods = items
+      .map((item, i) => {
+        if (!selected[i]) return null
+        const nutrients = getAdjusted(item, servingsMap[i])
+        return {
+          ...item,
+          servings: servingsMap[i],
+          nutrients,
+          logId: `log_${Date.now()}_${i}`,
+          loggedAt: Date.now(),
+        }
+      })
+      .filter(Boolean)
+    onConfirm(foods)
+  }
+
+  const totalCal = items.reduce(
+    (sum, item, i) => sum + (selected[i] ? Math.round((item.nutrients.calories || 0) * servingsMap[i]) : 0),
+    0
+  )
+
+  return (
+    <div className="space-y-4">
+      <button onClick={onBack} className="text-gray-400 hover:text-white text-sm">&larr; Back</button>
+      <h3 className="text-lg font-semibold text-white">Items Found</h3>
+      <p className="text-sm text-gray-400">Toggle items and adjust portions</p>
+
+      <div className="space-y-3 max-h-96 overflow-y-auto">
+        {items.map((item, i) => (
+          <div
+            key={i}
+            className={`p-3 rounded-lg border transition ${
+              selected[i] ? 'bg-gray-800 border-blue-500/50' : 'bg-gray-800/50 border-gray-700 opacity-50'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <button onClick={() => toggleItem(i)} className="flex items-center gap-2 text-left flex-1">
+                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${
+                  selected[i] ? 'bg-blue-600 border-blue-600' : 'border-gray-600'
+                }`}>
+                  {selected[i] && <span className="text-white text-xs">&#10003;</span>}
+                </div>
+                <div>
+                  <p className="text-white text-sm font-medium">{item.name}</p>
+                  <p className="text-xs text-gray-400">{item.estimatedServingSize} | {item.nutrients.calories} cal</p>
+                </div>
+              </button>
+            </div>
+            {selected[i] && (
+              <div className="flex items-center gap-2 mt-2 ml-7">
+                <span className="text-xs text-gray-400">Qty:</span>
+                <button onClick={() => updateServings(i, servingsMap[i] - 0.5)}
+                  className="w-7 h-7 rounded bg-gray-700 text-white text-sm hover:bg-gray-600">-</button>
+                <span className="text-white text-sm w-8 text-center">{servingsMap[i]}</span>
+                <button onClick={() => updateServings(i, servingsMap[i] + 0.5)}
+                  className="w-7 h-7 rounded bg-gray-700 text-white text-sm hover:bg-gray-600">+</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-gray-400">{items.filter((_, i) => selected[i]).length} items selected</span>
+        <span className="text-white font-medium">{totalCal} cal total</span>
+      </div>
+
+      <button
+        onClick={handleConfirm}
+        disabled={!selected.some(Boolean)}
+        className="w-full py-3 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-500 transition disabled:opacity-50"
+      >
+        Add All to Meal
       </button>
     </div>
   )
 }
 
 export default function AddFood({ mealType, apiKey, onAdd, onClose }) {
-  const [mode, setMode] = useState('choose') // choose | label | photo | history | adjust
+  const [mode, setMode] = useState('choose') // choose | history | adjust | multi | added
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [scannedFood, setScannedFood] = useState(null)
+  const [multiItems, setMultiItems] = useState([])
+  const [addedCount, setAddedCount] = useState(0)
   const fileRef = useRef(null)
+
+  const resetForAnother = () => {
+    setScannedFood(null)
+    setMultiItems([])
+    setError('')
+    setMode('choose')
+    // Reset file input so same file can be re-selected
+    if (fileRef.current) fileRef.current.value = ''
+  }
 
   const handleCapture = async (e, isLabel) => {
     const file = e.target.files?.[0]
@@ -132,21 +243,42 @@ export default function AddFood({ mealType, apiKey, onAdd, onClose }) {
         reader.readAsDataURL(file)
       })
 
-      const result = isLabel
-        ? await analyzeNutritionLabel(apiKey, base64)
-        : await analyzeFoodPhoto(apiKey, base64)
+      if (isLabel) {
+        const result = await analyzeNutritionLabel(apiKey, base64)
+        const food = {
+          id: `food_${Date.now()}`,
+          name: result.name || 'Unknown Food',
+          servingSize: result.servingSize || '1 serving',
+          nutrients: result.nutrients,
+          source: 'label',
+        }
+        saveFoodToLibrary(food)
+        setScannedFood(food)
+        setMode('adjust')
+      } else {
+        const result = await analyzeFoodPhoto(apiKey, base64)
+        const items = (result.items || []).map((item, i) => ({
+          id: `food_${Date.now()}_${i}`,
+          name: item.name || 'Unknown Item',
+          servingSize: item.estimatedServingSize || '1 serving',
+          estimatedServingSize: item.estimatedServingSize || '1 serving',
+          nutrients: item.nutrients,
+          confidence: item.confidence,
+          source: 'photo',
+        }))
+        // Save each item to library
+        items.forEach((item) => saveFoodToLibrary(item))
 
-      const food = {
-        id: `food_${Date.now()}`,
-        name: result.name || 'Unknown Food',
-        servingSize: result.servingSize || result.estimatedServingSize || '1 serving',
-        nutrients: result.nutrients,
-        source: isLabel ? 'label' : 'photo',
+        if (items.length === 1) {
+          setScannedFood(items[0])
+          setMode('adjust')
+        } else if (items.length > 1) {
+          setMultiItems(items)
+          setMode('multi')
+        } else {
+          setError('Could not identify any food items in the photo')
+        }
       }
-
-      saveFoodToLibrary(food)
-      setScannedFood(food)
-      setMode('adjust')
     } catch (err) {
       setError(err.message || 'Failed to analyze image')
     } finally {
@@ -159,13 +291,58 @@ export default function AddFood({ mealType, apiKey, onAdd, onClose }) {
     setMode('adjust')
   }
 
-  const handleConfirm = (foodWithServings) => {
+  const handleConfirmSingle = (foodWithServings) => {
     onAdd({
       ...foodWithServings,
       logId: `log_${Date.now()}`,
       loggedAt: Date.now(),
     })
-    onClose()
+    setAddedCount((c) => c + 1)
+    setMode('added')
+  }
+
+  const handleConfirmMulti = (foods) => {
+    foods.forEach((food) => onAdd(food))
+    setAddedCount((c) => c + foods.length)
+    setMode('added')
+  }
+
+  // "Added" confirmation with "Add Another" option
+  if (mode === 'added') {
+    return (
+      <div className="bg-gray-900 rounded-xl p-5 space-y-4 text-center">
+        <div className="text-green-400 text-4xl">&#10003;</div>
+        <p className="text-white font-medium">
+          {addedCount} item{addedCount !== 1 ? 's' : ''} added to {mealType}
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={resetForAnother}
+            className="flex-1 py-3 rounded-lg bg-gray-800 text-white hover:bg-gray-700 transition"
+          >
+            Add Another
+          </button>
+          <button
+            onClick={onClose}
+            className="flex-1 py-3 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-500 transition"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (mode === 'multi' && multiItems.length > 0) {
+    return (
+      <div className="bg-gray-900 rounded-xl p-5">
+        <MultiItemPicker
+          items={multiItems}
+          onConfirm={handleConfirmMulti}
+          onBack={resetForAnother}
+        />
+      </div>
+    )
   }
 
   if (mode === 'adjust' && scannedFood) {
@@ -173,8 +350,8 @@ export default function AddFood({ mealType, apiKey, onAdd, onClose }) {
       <div className="bg-gray-900 rounded-xl p-5">
         <ServingAdjuster
           food={scannedFood}
-          onConfirm={handleConfirm}
-          onBack={() => setMode('choose')}
+          onConfirm={handleConfirmSingle}
+          onBack={resetForAnother}
         />
       </div>
     )
@@ -197,6 +374,10 @@ export default function AddFood({ mealType, apiKey, onAdd, onClose }) {
         <h3 className="text-lg font-semibold text-white capitalize">Add to {mealType}</h3>
         <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">&times;</button>
       </div>
+
+      {addedCount > 0 && (
+        <p className="text-sm text-green-400">{addedCount} item{addedCount !== 1 ? 's' : ''} added so far</p>
+      )}
 
       {error && <p className="text-red-400 text-sm">{error}</p>}
 
@@ -226,7 +407,7 @@ export default function AddFood({ mealType, apiKey, onAdd, onClose }) {
             className="p-4 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-left transition"
           >
             <p className="text-white font-medium">Snap Food Photo</p>
-            <p className="text-xs text-gray-400 mt-1">AI estimates nutrition from the food itself</p>
+            <p className="text-xs text-gray-400 mt-1">AI identifies each item on your plate</p>
           </button>
 
           <button
@@ -237,6 +418,15 @@ export default function AddFood({ mealType, apiKey, onAdd, onClose }) {
             <p className="text-xs text-gray-400 mt-1">Re-add a previously logged food</p>
           </button>
         </div>
+      )}
+
+      {addedCount > 0 && (
+        <button
+          onClick={onClose}
+          className="w-full py-2 text-sm text-gray-400 hover:text-white transition"
+        >
+          Done adding
+        </button>
       )}
 
       <input

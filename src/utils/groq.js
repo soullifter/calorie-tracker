@@ -82,32 +82,35 @@ export async function analyzeFoodPhoto(apiKey, imageBase64) {
       content: [
         {
           type: 'text',
-          text: `Look at this food photo and estimate the nutritional content. Identify each food item visible, estimate portion sizes, and calculate approximate nutrition. Return JSON:
+          text: `Look at this food photo and identify EACH individual food item visible. For each item, estimate its portion size and nutritional content separately. Return JSON:
 {
-  "name": "brief description of the meal/food",
-  "items": ["item 1", "item 2"],
-  "estimatedServingSize": "your estimate of total portion",
-  "nutrients": {
-    "calories": number,
-    "protein": number (grams),
-    "carbs": number (grams),
-    "fat": number (grams),
-    "saturatedFat": number or null,
-    "transFat": number or null,
-    "fiber": number or null,
-    "sugar": number or null,
-    "sodium": number (mg) or null,
-    "cholesterol": number (mg) or null,
-    "potassium": number (mg) or null,
-    "calcium": number (mg) or null,
-    "iron": number (mg) or null,
-    "vitaminA": number (mcg) or null,
-    "vitaminC": number (mg) or null,
-    "vitaminD": number (mcg) or null
-  },
-  "confidence": "low" | "medium" | "high"
+  "items": [
+    {
+      "name": "item name (e.g. 'Scrambled Eggs')",
+      "estimatedServingSize": "your estimate (e.g. '2 eggs' or '150g')",
+      "nutrients": {
+        "calories": number,
+        "protein": number (grams),
+        "carbs": number (grams),
+        "fat": number (grams),
+        "saturatedFat": number or null,
+        "transFat": number or null,
+        "fiber": number or null,
+        "sugar": number or null,
+        "sodium": number (mg) or null,
+        "cholesterol": number (mg) or null,
+        "potassium": number (mg) or null,
+        "calcium": number (mg) or null,
+        "iron": number (mg) or null,
+        "vitaminA": number (mcg) or null,
+        "vitaminC": number (mg) or null,
+        "vitaminD": number (mcg) or null
+      },
+      "confidence": "low" | "medium" | "high"
+    }
+  ]
 }
-Be realistic with estimates. Use numbers only, no units in values.`,
+Return each food item as a separate entry in the items array. Be realistic with estimates. Use numbers only, no units in values.`,
         },
         {
           type: 'image_url',
