@@ -5,6 +5,7 @@ import { ACTIVITY_LEVELS } from './utils/constants'
 import Onboarding from './components/Onboarding'
 import Home from './components/Home'
 import Dashboard from './components/Dashboard'
+import ExercisePage from './components/ExercisePage'
 import Settings from './components/Settings'
 import BottomNav from './components/BottomNav'
 
@@ -97,14 +98,17 @@ function App() {
         <Home
           profile={profile}
           onSelectDay={(dateKey) => setSelectedDate(dateKey)}
-          onGoToday={() => setTab('today')}
+          onGoToday={() => setTab('food')}
         />
       )}
-      {tab === 'today' && (
+      {tab === 'food' && (
         <Dashboard
           profile={profile}
           onOpenSettings={() => setTab('settings')}
         />
+      )}
+      {tab === 'exercise' && (
+        <ExercisePage profile={profile} />
       )}
       {tab === 'settings' && (
         <Settings

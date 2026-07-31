@@ -9,12 +9,20 @@ const tabs = [
     ),
   },
   {
-    id: 'today',
-    label: 'Today',
+    id: 'food',
+    label: 'Food',
     icon: (
       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-        <circle cx="12" cy="12" r="10" />
-        <path d="M12 6v6l4 2" />
+        <path d="M18 8h1a4 4 0 0 1 0 8h-1M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8zm0-3h16" />
+      </svg>
+    ),
+  },
+  {
+    id: 'exercise',
+    label: 'Exercise',
+    icon: (
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <path d="M13 4v16M7 4v16M3 8h4m-4 8h4m6-8h8m-8 8h8M7 4h6M7 20h6" />
       </svg>
     ),
   },
@@ -52,7 +60,6 @@ export default function BottomNav({ active, onChange }) {
           })}
         </div>
       </div>
-      {/* Safe area padding for iOS */}
       <div className="glass h-[env(safe-area-inset-bottom)]" />
     </div>
   )
