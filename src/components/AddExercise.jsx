@@ -41,13 +41,21 @@ function DynamicFields({ fields, values, onChange }) {
 }
 
 export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }) {
-  const [mode, setMode] = useState('choose') // choose | photo-result | quick | calculating
+  // Steps: choose → (photo: pick-group → pick-exercise → fill-fields) or (quick)
+  const [step, setStep] = useState('choose')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [identified, setIdentified] = useState(null) // AI-identified exercise
+
+  // Photo flow state
+  const [equipment, setEquipment] = useState(null) // AI result
+  const [selectedGroup, setSelectedGroup] = useState(null) // muscle group object
+  const [selectedExercise, setSelectedExercise] = useState(null) // exercise object
   const [fieldValues, setFieldValues] = useState({})
+
+  // Quick flow state
   const [quickExercise, setQuickExercise] = useState('')
   const [quickDuration, setQuickDuration] = useState('30')
+
   const fileRef = useRef(null)
 
   const compressImage = (file, maxDim = 768, quality = 0.6) => {
@@ -71,6 +79,16 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
     })
   }
 
+  const reset = () => {
+    setStep('choose')
+    setEquipment(null)
+    setSelectedGroup(null)
+    setSelectedExercise(null)
+    setFieldValues({})
+    setError('')
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
   const handlePhoto = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -79,27 +97,56 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
     try {
       const base64 = await compressImage(file)
       const result = await identifyExercise(keys, base64)
-      setIdentified(result)
-      // Pre-fill defaults
-      const defaults = {}
-      ;(result.fields || []).forEach((f) => {
-        if (f.default != null) defaults[f.key] = f.default
-        if (f.type === 'select' && f.options?.length) defaults[f.key] = f.options[0]
-      })
-      setFieldValues(defaults)
-      setMode('photo-result')
+      setEquipment(result)
+
+      // If cardio equipment with only one group, skip group selection
+      if (result.isCardio && result.muscleGroupOptions?.length === 1) {
+        const group = result.muscleGroupOptions[0]
+        setSelectedGroup(group)
+        if (group.exercises?.length === 1) {
+          selectExercise(group.exercises[0])
+          setStep('fill-fields')
+        } else {
+          setStep('pick-exercise')
+        }
+      } else {
+        setStep('pick-group')
+      }
     } catch (err) {
-      setError(err.message || 'Failed to identify exercise')
+      setError(err.message || 'Failed to identify equipment')
     } finally {
       setLoading(false)
       if (fileRef.current) fileRef.current.value = ''
     }
   }
 
+  const selectExercise = (exercise) => {
+    setSelectedExercise(exercise)
+    const defaults = {}
+    ;(exercise.fields || []).forEach((f) => {
+      if (f.default != null) defaults[f.key] = f.default
+      if (f.type === 'select' && f.options?.length) defaults[f.key] = f.options[0]
+    })
+    setFieldValues(defaults)
+  }
+
+  const handleGroupSelect = (group) => {
+    setSelectedGroup(group)
+    if (group.exercises?.length === 1) {
+      selectExercise(group.exercises[0])
+      setStep('fill-fields')
+    } else {
+      setStep('pick-exercise')
+    }
+  }
+
+  const handleExerciseSelect = (exercise) => {
+    selectExercise(exercise)
+    setStep('fill-fields')
+  }
+
   const handleCalculate = async () => {
-    if (!identified) return
-    // Validate all fields have values
-    const missingField = (identified.fields || []).find((f) => {
+    const missingField = (selectedExercise.fields || []).find((f) => {
       const val = fieldValues[f.key]
       return val === undefined || val === ''
     })
@@ -112,25 +159,26 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
     setError('')
     try {
       const params = {}
-      ;(identified.fields || []).forEach((f) => {
+      ;(selectedExercise.fields || []).forEach((f) => {
         const val = fieldValues[f.key]
         params[f.key] = f.type === 'number' ? parseFloat(val) || 0 : val
       })
 
       const result = await calculateExerciseCalories(keys, {
-        name: identified.name,
-        type: identified.type,
+        name: selectedExercise.name,
+        type: selectedGroup?.group || 'strength',
         params,
       }, weightKg, heightCm)
 
       onAdd({
         id: `ex_${Date.now()}`,
-        exercise: identified.name,
-        type: identified.type,
-        muscleGroups: identified.muscleGroups || [],
+        exercise: selectedExercise.name,
+        equipment: equipment?.equipment,
+        type: selectedGroup?.group?.toLowerCase() || 'strength',
+        muscleGroups: [selectedGroup?.group].filter(Boolean),
         params,
         summary: result.summary || '',
-        durationMin: params.duration || params.sets ? Math.round((params.sets || 1) * (params.reps || 10) * 0.1) : 0,
+        durationMin: params.duration || (params.sets ? Math.round((params.sets || 1) * (params.reps || 10) * 0.1) : 0),
         caloriesBurned: result.caloriesBurned || 0,
         intensity: result.intensity || 'moderate',
         loggedAt: Date.now(),
@@ -168,40 +216,81 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
     }
   }
 
-  const updateField = (key, value) => {
-    setFieldValues((v) => ({ ...v, [key]: value }))
+  const updateField = (key, value) => setFieldValues((v) => ({ ...v, [key]: value }))
+
+  const BackButton = ({ to }) => (
+    <button onClick={() => to ? setStep(to) : reset()} className="text-gray-400 hover:text-white text-sm flex items-center gap-1 mb-3">
+      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+      Back
+    </button>
+  )
+
+  const EquipmentBadge = () => equipment && (
+    <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 mb-4">
+      <p className="text-emerald-400 text-sm font-medium">{equipment.equipment}</p>
+    </div>
+  )
+
+  // Step: Pick muscle group
+  if (step === 'pick-group' && equipment) {
+    return (
+      <div className="space-y-3">
+        <BackButton />
+        <EquipmentBadge />
+        <p className="text-sm text-gray-400">What are you targeting?</p>
+        <div className="grid grid-cols-2 gap-2">
+          {(equipment.muscleGroupOptions || []).map((group) => (
+            <button
+              key={group.group}
+              onClick={() => handleGroupSelect(group)}
+              className="p-3 rounded-xl bg-gray-800 border border-gray-700 hover:border-emerald-500/50 text-left transition"
+            >
+              <p className="text-white text-sm font-medium">{group.group}</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">
+                {(group.exercises || []).map((e) => e.name).join(', ')}
+              </p>
+            </button>
+          ))}
+        </div>
+      </div>
+    )
   }
 
-  // Photo result — show identified exercise + dynamic fields
-  if (mode === 'photo-result' && identified) {
+  // Step: Pick exercise
+  if (step === 'pick-exercise' && selectedGroup) {
+    return (
+      <div className="space-y-3">
+        <BackButton to="pick-group" />
+        <EquipmentBadge />
+        <p className="text-sm text-gray-400">{selectedGroup.group} exercises:</p>
+        <div className="space-y-2">
+          {(selectedGroup.exercises || []).map((exercise) => (
+            <button
+              key={exercise.name}
+              onClick={() => handleExerciseSelect(exercise)}
+              className="w-full p-3 rounded-xl bg-gray-800 border border-gray-700 hover:border-emerald-500/50 text-left transition"
+            >
+              <p className="text-white text-sm font-medium">{exercise.name}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // Step: Fill fields
+  if (step === 'fill-fields' && selectedExercise) {
     return (
       <div className="space-y-4">
-        <button onClick={() => setMode('choose')} className="text-gray-400 hover:text-white text-sm flex items-center gap-1">
-          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
-          Back
-        </button>
-
-        {/* Identified exercise */}
-        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
-          <p className="text-white font-semibold">{identified.name}</p>
-          <div className="flex items-center gap-2 mt-1.5">
-            <span className={`text-xs px-2 py-0.5 rounded-full ${
-              identified.type === 'strength' ? 'bg-blue-500/15 text-blue-400' :
-              identified.type === 'cardio' ? 'bg-emerald-500/15 text-emerald-400' :
-              identified.type === 'bodyweight' ? 'bg-amber-500/15 text-amber-400' :
-              'bg-purple-500/15 text-purple-400'
-            }`}>
-              {identified.type}
-            </span>
-            {(identified.muscleGroups || []).slice(0, 3).map((mg) => (
-              <span key={mg} className="text-xs text-gray-500">{mg}</span>
-            ))}
-          </div>
+        <BackButton to={selectedGroup?.exercises?.length > 1 ? 'pick-exercise' : 'pick-group'} />
+        <EquipmentBadge />
+        <div className="bg-surface-3 rounded-xl px-4 py-3">
+          <p className="text-white font-semibold text-sm">{selectedExercise.name}</p>
+          <p className="text-xs text-gray-500 mt-0.5">{selectedGroup?.group}</p>
         </div>
 
-        {/* Dynamic fields */}
         <DynamicFields
-          fields={identified.fields || []}
+          fields={selectedExercise.fields || []}
           values={fieldValues}
           onChange={updateField}
         />
@@ -219,15 +308,11 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
     )
   }
 
-  // Quick exercise mode (text-based)
-  if (mode === 'quick') {
+  // Quick exercise mode
+  if (step === 'quick') {
     return (
       <div className="space-y-4">
-        <button onClick={() => setMode('choose')} className="text-gray-400 hover:text-white text-sm flex items-center gap-1">
-          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
-          Back
-        </button>
-
+        <BackButton />
         <div className="flex flex-wrap gap-2">
           {QUICK_EXERCISES.map((ex) => (
             <button key={ex} onClick={() => setQuickExercise(ex)}
@@ -259,7 +344,7 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
     )
   }
 
-  // Choose mode
+  // Choose mode (default)
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -276,7 +361,7 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
       {loading ? (
         <div className="text-center py-8">
           <div className="inline-block w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-400 mt-3 text-sm">Identifying exercise...</p>
+          <p className="text-gray-400 mt-3 text-sm">Identifying equipment...</p>
         </div>
       ) : (
         <div className="grid gap-3">
@@ -285,15 +370,15 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
             className="p-4 rounded-lg bg-gray-800 border border-gray-700 hover:border-emerald-500 text-left transition"
           >
             <p className="text-white font-medium">Snap Equipment Photo</p>
-            <p className="text-xs text-gray-400 mt-1">AI identifies the machine and asks the right questions</p>
+            <p className="text-xs text-gray-400 mt-1">AI identifies the machine and suggests exercises</p>
           </button>
 
           <button
-            onClick={() => setMode('quick')}
+            onClick={() => setStep('quick')}
             className="p-4 rounded-lg bg-gray-800 border border-gray-700 hover:border-blue-500 text-left transition"
           >
             <p className="text-white font-medium">Quick Log</p>
-            <p className="text-xs text-gray-400 mt-1">Type exercise name and duration for a quick estimate</p>
+            <p className="text-xs text-gray-400 mt-1">Type exercise name and duration</p>
           </button>
         </div>
       )}

@@ -179,14 +179,13 @@ export async function estimateExerciseCalories(keys, exercise, durationMin, weig
   })
 }
 
-const EXERCISE_PHOTO_PROMPT = `Identify the exercise equipment, machine, or activity in this photo. Return JSON:
-{"name":"str (e.g. 'Lat Pulldown Machine', 'Treadmill', 'Barbell Bench Press', 'Yoga Mat')","type":"strength|cardio|bodyweight|flexibility|sport","muscleGroups":["str"],"fields":[{"key":"str","label":"str","type":"number|select","unit":"str_or_null","options":["str"]_or_null,"default":num_or_null}]}
-The "fields" array must contain the SPECIFIC inputs needed to calculate calories for THIS exercise. Examples:
-- Weight machine: [{"key":"weight","label":"Weight","type":"number","unit":"kg"},{"key":"sets","label":"Sets","type":"number"},{"key":"reps","label":"Reps per set","type":"number"}]
-- Treadmill: [{"key":"speed","label":"Speed","type":"number","unit":"km/h"},{"key":"duration","label":"Duration","type":"number","unit":"min"},{"key":"incline","label":"Incline","type":"number","unit":"%","default":0}]
-- Swimming: [{"key":"duration","label":"Duration","type":"number","unit":"min"},{"key":"stroke","label":"Stroke","type":"select","options":["freestyle","backstroke","breaststroke","butterfly"]}]
-- Bodyweight: [{"key":"sets","label":"Sets","type":"number"},{"key":"reps","label":"Reps per set","type":"number"}]
-Always include a duration or sets/reps field. Be specific to the identified exercise.`
+const EXERCISE_PHOTO_PROMPT = `Identify the exercise equipment or setup in this photo. The same equipment can be used for many different exercises, so list ALL possible exercises grouped by muscle group. Return JSON:
+{"equipment":"str (e.g. 'Flat Bench', 'Cable Machine', 'Treadmill', 'Pull-up Bar')","isCardio":bool,"muscleGroupOptions":[{"group":"str (e.g. 'Chest','Back','Legs','Shoulders','Arms','Core','Full Body','Cardio')","exercises":[{"name":"str","fields":[{"key":"str","label":"str","type":"number|select","unit":"str_or_null","options":["str"]_or_null,"default":num_or_null}]}]}]}
+Each exercise must have the SPECIFIC input fields needed to calculate calories:
+- Strength: weight(kg), sets, reps
+- Cardio: speed(km/h), duration(min), incline(%)
+- Bodyweight: sets, reps
+Include 2-5 exercises per muscle group. Only include muscle groups relevant to the equipment.`
 
 export async function identifyExercise(keys, imageBase64) {
   return runWithFallback(VISION_CHAIN, keys, (provider) => {
