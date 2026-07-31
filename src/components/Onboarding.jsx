@@ -196,9 +196,34 @@ export default function Onboarding({ onComplete }) {
     onComplete(profile)
   }
 
+  const handleImport = () => {
+    const input = prompt('Paste your data here:')
+    if (!input) return
+    try {
+      const data = JSON.parse(input)
+      for (const [key, val] of Object.entries(data)) {
+        if (key.startsWith('ct_')) localStorage.setItem(key, val)
+      }
+      alert('Data imported! Reloading...')
+      window.location.reload()
+    } catch {
+      alert('Invalid data. Make sure you copied the full text.')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-surface-1 flex items-center justify-center p-5">
       <div className="w-full max-w-md">
+        {/* Import existing data */}
+        {step === 0 && (
+          <button
+            onClick={handleImport}
+            className="w-full mb-6 py-3 rounded-xl border border-dashed border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/20 text-sm transition"
+          >
+            Already have data? Tap to import
+          </button>
+        )}
+
         {/* Progress bar */}
         <div className="flex gap-2 mb-8">
           {[0, 1, 2].map((i) => (

@@ -158,6 +158,56 @@ export default function Settings({ profile, onUpdate, onClose }) {
           {saved ? 'Saved!' : 'Save Changes'}
         </button>
 
+        {/* Data Transfer */}
+        <div className="bg-gray-900 rounded-xl p-4 space-y-3">
+          <h3 className="text-white font-medium">Transfer Data</h3>
+          <p className="text-xs text-gray-500">Copy your data to move it to the installed app or another browser</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                const allData = {}
+                for (let i = 0; i < localStorage.length; i++) {
+                  const key = localStorage.key(i)
+                  if (key.startsWith('ct_')) allData[key] = localStorage.getItem(key)
+                }
+                navigator.clipboard.writeText(JSON.stringify(allData))
+                  .then(() => alert('Data copied! Open the app where you want to transfer and paste it there.'))
+                  .catch(() => {
+                    const ta = document.createElement('textarea')
+                    ta.value = JSON.stringify(allData)
+                    document.body.appendChild(ta)
+                    ta.select()
+                    document.execCommand('copy')
+                    document.body.removeChild(ta)
+                    alert('Data copied!')
+                  })
+              }}
+              className="flex-1 py-3 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition text-sm font-medium"
+            >
+              Copy All Data
+            </button>
+            <button
+              onClick={() => {
+                const input = prompt('Paste your data here:')
+                if (!input) return
+                try {
+                  const data = JSON.parse(input)
+                  for (const [key, val] of Object.entries(data)) {
+                    if (key.startsWith('ct_')) localStorage.setItem(key, val)
+                  }
+                  alert('Data imported! Reloading...')
+                  window.location.reload()
+                } catch {
+                  alert('Invalid data. Make sure you copied the full text.')
+                }
+              }}
+              className="flex-1 py-3 rounded-lg bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 transition text-sm font-medium"
+            >
+              Import Data
+            </button>
+          </div>
+        </div>
+
         {/* Danger zone */}
         <button
           onClick={() => {
