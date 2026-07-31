@@ -6,36 +6,99 @@ const QUICK_EXERCISES = [
   'Yoga', 'HIIT', 'Stretching', 'Stair Climbing', 'Elliptical',
 ]
 
-function DynamicFields({ fields, values, onChange }) {
+
+function DynamicFields({ fields, values, onChange, weightDisplayValues }) {
   return (
     <div className="space-y-3">
-      {fields.map((field) => (
-        <div key={field.key}>
-          <label className="text-xs text-gray-400 mb-1 block">
-            {field.label}{field.unit ? ` (${field.unit})` : ''}
-          </label>
-          {field.type === 'select' && field.options ? (
-            <select
-              value={values[field.key] || field.options[0]}
-              onChange={(e) => onChange(field.key, e.target.value)}
-              className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-700 focus:border-emerald-500 focus:outline-none"
-            >
-              {field.options.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-          ) : (
-            <input
-              type="text"
-              inputMode="decimal"
-              value={values[field.key] ?? field.default ?? ''}
-              onChange={(e) => onChange(field.key, e.target.value)}
-              placeholder={field.default != null ? String(field.default) : ''}
-              className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-700 focus:border-emerald-500 focus:outline-none"
-            />
-          )}
-        </div>
-      ))}
+      {fields.map((field) => {
+        const isWeight = field.unit === 'kg' || field.key === 'weight'
+
+        if (isWeight) {
+          return <WeightField key={field.key} field={field} value={values[field.key]} displayValue={weightDisplayValues?.[field.key]} onChange={onChange} />
+        }
+
+        return (
+          <div key={field.key}>
+            <label className="text-xs text-gray-400 mb-1 block">
+              {field.label}{field.unit ? ` (${field.unit})` : ''}
+            </label>
+            {field.type === 'select' && field.options ? (
+              <select
+                value={values[field.key] || field.options[0]}
+                onChange={(e) => onChange(field.key, e.target.value)}
+                className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-700 focus:border-emerald-500 focus:outline-none"
+              >
+                {field.options.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                inputMode="decimal"
+                value={values[field.key] ?? field.default ?? ''}
+                onChange={(e) => onChange(field.key, e.target.value)}
+                placeholder={field.default != null ? String(field.default) : ''}
+                className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-700 focus:border-emerald-500 focus:outline-none"
+              />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function WeightField({ field, value, displayValue, onChange }) {
+  const [unit, setUnit] = useState('kg')
+
+  const handleInput = (raw) => {
+    if (unit === 'lbs') {
+      const lbs = parseFloat(raw)
+      const kgVal = !isNaN(lbs) ? String(Math.round(lbs * 0.453592 * 10) / 10) : ''
+      onChange(field.key, kgVal, raw)
+    } else {
+      onChange(field.key, raw)
+    }
+  }
+
+  const toggleUnit = () => {
+    const currentDisplay = unit === 'lbs' ? displayValue : value
+    const num = parseFloat(currentDisplay)
+    if (unit === 'kg') {
+      setUnit('lbs')
+      if (!isNaN(num)) {
+        const lbs = String(Math.round(num * 2.20462))
+        onChange(field.key, value, lbs)
+      }
+    } else {
+      setUnit('kg')
+      // value is already in kg
+    }
+  }
+
+  const shown = unit === 'lbs' ? (displayValue || '') : (value ?? field.default ?? '')
+
+  return (
+    <div>
+      <label className="text-xs text-gray-400 mb-1 block">{field.label}</label>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          inputMode="decimal"
+          value={shown}
+          onChange={(e) => handleInput(e.target.value)}
+          placeholder={field.default != null ? String(field.default) : ''}
+          className="flex-1 p-3 rounded-lg bg-gray-800 text-white border border-gray-700 focus:border-emerald-500 focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={toggleUnit}
+          className="px-4 rounded-lg bg-gray-700 text-white text-sm font-medium hover:bg-gray-600 transition shrink-0"
+        >
+          {unit}
+        </button>
+      </div>
     </div>
   )
 }
@@ -51,6 +114,7 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
   const [selectedGroup, setSelectedGroup] = useState(null) // muscle group object
   const [selectedExercise, setSelectedExercise] = useState(null) // exercise object
   const [fieldValues, setFieldValues] = useState({})
+  const [weightDisplayValues, setWeightDisplayValues] = useState({}) // lbs display values
 
   // Quick flow state
   const [quickExercise, setQuickExercise] = useState('')
@@ -216,7 +280,12 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
     }
   }
 
-  const updateField = (key, value) => setFieldValues((v) => ({ ...v, [key]: value }))
+  const updateField = (key, value, lbsDisplay) => {
+    setFieldValues((v) => ({ ...v, [key]: value }))
+    if (lbsDisplay !== undefined) {
+      setWeightDisplayValues((v) => ({ ...v, [key]: lbsDisplay }))
+    }
+  }
 
   const BackButton = ({ to }) => (
     <button onClick={() => to ? setStep(to) : reset()} className="text-gray-400 hover:text-white text-sm flex items-center gap-1 mb-3">
@@ -293,6 +362,7 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
           fields={selectedExercise.fields || []}
           values={fieldValues}
           onChange={updateField}
+          weightDisplayValues={weightDisplayValues}
         />
 
         {error && <p className="text-red-400 text-sm">{error}</p>}
