@@ -4,6 +4,7 @@ import { getDayLog, getWeightLog } from '../utils/storage'
 import { MEAL_TYPES } from '../utils/constants'
 import CalorieRing from './CalorieRing'
 import WeeklyChart from './WeeklyChart'
+import { WeeklyExerciseChart, MuscleGroupMap, ProgressiveOverload } from './ExerciseTrends'
 import CalendarPicker from './CalendarPicker'
 
 function QuickStat({ label, value, sub, color = 'text-white' }) {
@@ -187,6 +188,11 @@ export default function Home({ profile, onSelectDay, onGoToday }) {
 
         {/* Weekly chart */}
         <WeeklyChart target={profile.targets.calories} />
+
+        {/* Exercise trends */}
+        <WeeklyExerciseChart />
+        <MuscleGroupMap />
+        <ProgressiveOverload />
 
         {/* Weight trend */}
         <WeightMini
