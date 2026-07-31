@@ -31,10 +31,10 @@ function getLast7DaysData() {
   return days
 }
 
-function getLast30DaysExercises() {
+function getExercisesForDays(numDays) {
   const today = new Date()
   const all = []
-  for (let i = 29; i >= 0; i--) {
+  for (let i = numDays - 1; i >= 0; i--) {
     const d = new Date(today)
     d.setDate(d.getDate() - i)
     const key = getDateKey(d)
@@ -101,10 +101,18 @@ export function WeeklyExerciseChart() {
   )
 }
 
+const RANGE_OPTIONS = [
+  { label: '7D', days: 7 },
+  { label: '30D', days: 30 },
+  { label: '90D', days: 90 },
+  { label: 'All', days: 365 },
+]
+
 // Muscle group detail view
 function MuscleGroupDetail({ group, onBack }) {
+  const [rangeDays, setRangeDays] = useState(30)
   const days = useMemo(getLast7DaysData, [])
-  const allExercises = useMemo(getLast30DaysExercises, [])
+  const allExercises = useMemo(() => getExercisesForDays(rangeDays), [rangeDays])
   const colors = MUSCLE_COLORS[group] || MUSCLE_COLORS.Chest
 
   // This week's exercises for this group
@@ -155,6 +163,19 @@ function MuscleGroupDetail({ group, onBack }) {
             <p className="text-xs text-gray-500">{weekExercises.length} exercises this week \u00B7 {totalBurned} cal</p>
           </div>
         </div>
+      </div>
+
+      {/* Range selector */}
+      <div className="flex rounded-xl overflow-hidden border border-white/5">
+        {RANGE_OPTIONS.map((opt) => (
+          <button
+            key={opt.days}
+            onClick={() => setRangeDays(opt.days)}
+            className={`flex-1 py-2 text-xs font-medium transition ${
+              rangeDays === opt.days ? 'bg-brand-500 text-white' : 'bg-surface-3 text-gray-500 hover:text-gray-300'
+            }`}
+          >{opt.label}</button>
+        ))}
       </div>
 
       {/* This week's sessions */}
@@ -265,7 +286,7 @@ function MuscleGroupDetail({ group, onBack }) {
       })}
 
       {Object.keys(exerciseHistory).length === 0 && (
-        <p className="text-gray-600 text-sm text-center py-2">No {group.toLowerCase()} history in the last 30 days</p>
+        <p className="text-gray-600 text-sm text-center py-2">No {group.toLowerCase()} history in the last {rangeDays} days</p>
       )}
     </div>
   )
@@ -329,7 +350,7 @@ export function MuscleGroupMap() {
 
 // Keep progressive overload as standalone for home page summary
 export function ProgressiveOverload() {
-  const allExercises = useMemo(getLast30DaysExercises, [])
+  const allExercises = useMemo(() => getExercisesForDays(30), [])
 
   const exerciseHistory = {}
   allExercises.forEach((ex) => {
