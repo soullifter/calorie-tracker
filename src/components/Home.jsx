@@ -8,10 +8,10 @@ import CalendarPicker from './CalendarPicker'
 
 function QuickStat({ label, value, sub, color = 'text-white' }) {
   return (
-    <div className="bg-surface-2 rounded-2xl p-4 text-center animate-fade-in">
-      <p className={`text-2xl font-bold tabular-nums ${color}`}>{value}</p>
-      <p className="text-[10px] uppercase tracking-widest text-gray-500 mt-1">{label}</p>
-      {sub && <p className="text-xs text-gray-600 mt-0.5">{sub}</p>}
+    <div className="bg-surface-2 rounded-2xl p-3 text-center animate-fade-in">
+      <p className={`text-xl font-bold tabular-nums ${color}`}>{value}</p>
+      <p className="text-[9px] uppercase tracking-widest text-gray-500 mt-1">{label}</p>
+      {sub && <p className="text-[10px] text-gray-600 mt-0.5">{sub}</p>}
     </div>
   )
 }
@@ -151,23 +151,39 @@ export default function Home({ profile, onSelectDay, onGoToday }) {
         </div>
 
         {/* Quick stats */}
-        <div className="grid grid-cols-3 gap-3">
-          <QuickStat
-            label="Streak"
-            value={`${streak}d`}
-            color={streak > 0 ? 'text-amber-400' : 'text-gray-600'}
-          />
-          <QuickStat
-            label="Target"
-            value={profile.targets.calories}
-            sub="cal/day"
-          />
-          <QuickStat
-            label="Deficit"
-            value={profile.deficit || 500}
-            sub="cal/day"
-          />
-        </div>
+        {(() => {
+          const latestWeight = weightLog.length > 0 ? weightLog[weightLog.length - 1].weight : profile.weightKg
+          const heightM = profile.heightCm / 100
+          const bmi = Math.round(latestWeight / (heightM * heightM) * 10) / 10
+          const bmiCategory = bmi < 18.5 ? 'Underweight' : bmi < 25 ? 'Normal' : bmi < 30 ? 'Overweight' : 'Obese'
+          const bmiColor = bmi < 18.5 ? 'text-amber-400' : bmi < 25 ? 'text-emerald-400' : bmi < 30 ? 'text-amber-400' : 'text-red-400'
+
+          return (
+            <div className="grid grid-cols-4 gap-2">
+              <QuickStat
+                label="Streak"
+                value={`${streak}d`}
+                color={streak > 0 ? 'text-amber-400' : 'text-gray-600'}
+              />
+              <QuickStat
+                label="BMI"
+                value={bmi}
+                sub={bmiCategory}
+                color={bmiColor}
+              />
+              <QuickStat
+                label="Target"
+                value={profile.targets.calories}
+                sub="cal/day"
+              />
+              <QuickStat
+                label="Deficit"
+                value={profile.deficit || 500}
+                sub="cal/day"
+              />
+            </div>
+          )
+        })()}
 
         {/* Weekly chart */}
         <WeeklyChart target={profile.targets.calories} />
