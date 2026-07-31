@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { identifyExercise, calculateExerciseCalories, estimateExerciseCalories } from '../utils/ai'
+import { identifyExercise, calculateExerciseCalories, estimateExerciseCalories, describeExercise } from '../utils/ai'
 
 const QUICK_EXERCISES = [
   'Walking', 'Running', 'Cycling', 'Swimming', 'Jump Rope',
@@ -120,6 +120,9 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
   const [quickExercise, setQuickExercise] = useState('')
   const [quickDuration, setQuickDuration] = useState('30')
   const [quickSteps, setQuickSteps] = useState('')
+
+  // Describe flow state
+  const [describeText, setDescribeText] = useState('')
 
   const fileRef = useRef(null)
 
@@ -259,27 +262,68 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
 
   const handleQuickSubmit = async () => {
     if (!quickExercise.trim()) return
+    const steps = parseInt(quickSteps) || 0
+    const dur = parseInt(quickDuration) || 0
+    if (!steps && !dur) { setError('Please enter steps or duration'); return }
     setLoading(true)
     setError('')
     try {
-      const dur = parseInt(quickDuration) || 30
-      const steps = parseInt(quickSteps) || 0
-      const exerciseDesc = steps > 0 ? `${quickExercise} (${steps} steps)` : quickExercise
-      const result = await estimateExerciseCalories(keys, exerciseDesc, dur, weightKg)
+      const parts = []
+      if (steps > 0) parts.push(`${steps} steps`)
+      if (dur > 0) parts.push(`${dur} minutes`)
+      const exerciseDesc = `${quickExercise} (${parts.join(', ')})`
+      const estDur = dur || Math.round(steps / 100) // ~100 steps/min as fallback
+      const result = await estimateExerciseCalories(keys, exerciseDesc, estDur, weightKg)
+      const summaryParts = []
+      if (steps > 0) summaryParts.push(`${steps.toLocaleString()} steps`)
+      if (dur > 0) summaryParts.push(`${dur} min`)
       onAdd({
         id: `ex_${Date.now()}`,
         exercise: result.exercise || quickExercise,
         type: 'cardio',
         muscleGroups: isWalking ? ['Legs'] : [],
-        params: { duration: dur, ...(steps > 0 ? { steps } : {}) },
-        summary: steps > 0 ? `${steps.toLocaleString()} steps \u00B7 ${dur} min` : `${dur} min`,
-        durationMin: dur,
+        params: { ...(dur > 0 ? { duration: dur } : {}), ...(steps > 0 ? { steps } : {}) },
+        summary: summaryParts.join(' \u00B7 '),
+        durationMin: estDur,
         caloriesBurned: result.caloriesBurned || 0,
         intensity: result.intensity || 'moderate',
         loggedAt: Date.now(),
       })
     } catch (err) {
       setError(err.message || 'Failed to estimate calories')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDescribeSubmit = async () => {
+    if (!describeText.trim()) return
+    setLoading(true)
+    setError('')
+    try {
+      const result = await describeExercise(keys, describeText, weightKg)
+      setEquipment(result)
+      const defaults = {}
+      if (result.isCardio && result.muscleGroupOptions?.length === 1) {
+        const group = result.muscleGroupOptions[0]
+        setSelectedGroup(group)
+        if (group.exercises?.length === 1) {
+          const ex = group.exercises[0]
+          setSelectedExercise(ex)
+          ;(ex.fields || []).forEach((f) => {
+            if (f.default != null) defaults[f.key] = f.default
+            if (f.type === 'select' && f.options?.length) defaults[f.key] = f.options[0]
+          })
+          setFieldValues(defaults)
+          setStep('fill-fields')
+        } else {
+          setStep('pick-exercise')
+        }
+      } else {
+        setStep('pick-group')
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to process description')
     } finally {
       setLoading(false)
     }
@@ -383,6 +427,30 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
     )
   }
 
+  // Describe exercise mode
+  if (step === 'describe') {
+    return (
+      <div className="space-y-4">
+        <BackButton />
+        <p className="text-sm text-gray-400">Describe what you're doing and AI will figure out the rest</p>
+        <textarea
+          value={describeText}
+          onChange={(e) => setDescribeText(e.target.value)}
+          placeholder="e.g. 'Playing basketball with friends', 'Walking in the park', 'Doing pushups and planks at home', 'Swimming laps at the pool'..."
+          rows={3}
+          className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-700 focus:border-emerald-500 focus:outline-none resize-none"
+        />
+
+        {error && <p className="text-red-400 text-sm">{error}</p>}
+
+        <button onClick={handleDescribeSubmit} disabled={!describeText.trim() || loading}
+          className="w-full py-3 rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-500 transition disabled:opacity-50">
+          {loading ? 'Analyzing...' : 'Identify Exercise'}
+        </button>
+      </div>
+    )
+  }
+
   // Quick exercise mode
   if (step === 'quick') {
     return (
@@ -413,9 +481,10 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
         )}
 
         <div>
-          <label className="text-xs text-gray-400 mb-1 block">Duration (minutes)</label>
+          <label className="text-xs text-gray-400 mb-1 block">Duration (minutes){isWalking ? ' — optional' : ''}</label>
           <input type="text" inputMode="numeric" value={quickDuration}
             onChange={(e) => setQuickDuration(e.target.value)}
+            placeholder={isWalking ? 'Optional if steps entered' : '30'}
             className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-700 focus:outline-none" />
         </div>
 
@@ -459,11 +528,19 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
           </button>
 
           <button
+            onClick={() => setStep('describe')}
+            className="p-4 rounded-lg bg-gray-800 border border-gray-700 hover:border-purple-500 text-left transition"
+          >
+            <p className="text-white font-medium">Describe Activity</p>
+            <p className="text-xs text-gray-400 mt-1">Tell AI what you're doing — playing, walking, swimming...</p>
+          </button>
+
+          <button
             onClick={() => setStep('quick')}
             className="p-4 rounded-lg bg-gray-800 border border-gray-700 hover:border-blue-500 text-left transition"
           >
             <p className="text-white font-medium">Quick Log</p>
-            <p className="text-xs text-gray-400 mt-1">Type exercise name and duration</p>
+            <p className="text-xs text-gray-400 mt-1">Pick exercise, enter steps or duration</p>
           </button>
         </div>
       )}

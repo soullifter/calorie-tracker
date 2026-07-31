@@ -217,3 +217,18 @@ export async function calculateExerciseCalories(keys, exerciseData, userWeightKg
     }
   })
 }
+
+export async function describeExercise(keys, description, weightKg) {
+  const prompt = `The user describes an activity: "${description}". Identify what exercise/activity this is, then return JSON with all possible exercises matching their description, grouped by muscle group:
+{"equipment":"str (what they described)","isCardio":bool,"muscleGroupOptions":[{"group":"str","exercises":[{"name":"str","fields":[{"key":"str","label":"str","type":"number|select","unit":"str_or_null","options":["str"]_or_null,"default":num_or_null}]}]}]}
+Fields must be the specific inputs needed. For walking/running: include steps and distance(km) fields, duration optional. For sports: include duration. For gym: include weight/sets/reps. Person weighs ${weightKg}kg. Be comprehensive with exercise options.`
+
+  return runWithFallback(TEXT_CHAIN, keys, (provider) => {
+    if (provider === 'gemini') {
+      return { prompt }
+    }
+    return {
+      messages: [{ role: 'user', content: prompt }],
+    }
+  })
+}
