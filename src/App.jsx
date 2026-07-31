@@ -1,29 +1,28 @@
 import { useState, useEffect } from 'react'
 import { getProfile, saveProfile } from './utils/storage'
-import { calculateBMR, calculateTDEE, calculateDailyTargets, calculateDeficit } from './utils/calculations'
+import { calculateBMR, calculateTDEE, calculateDailyTargets, calculateDeficit, getDateKey } from './utils/calculations'
 import { ACTIVITY_LEVELS } from './utils/constants'
 import Onboarding from './components/Onboarding'
+import Home from './components/Home'
 import Dashboard from './components/Dashboard'
 import Settings from './components/Settings'
+import BottomNav from './components/BottomNav'
 
 // Migrate old profiles that are missing new fields
 function migrateProfile(p) {
   if (!p) return null
   let changed = false
 
-  // Add geminiApiKey if missing (old profiles only had groqApiKey)
   if (!('geminiApiKey' in p)) {
     p.geminiApiKey = ''
     changed = true
   }
 
-  // Add gender if missing
   if (!p.gender) {
     p.gender = 'male'
     changed = true
   }
 
-  // Recalculate targets if they seem like old format (missing deficit-based calc)
   if (!('deficit' in p)) {
     const weight = parseFloat(p.weightKg)
     const height = parseFloat(p.heightCm)
@@ -51,19 +50,17 @@ function migrateProfile(p) {
 
 function App() {
   const [profile, setProfile] = useState(null)
-  const [view, setView] = useState('loading')
+  const [tab, setTab] = useState('home') // home | today | settings
+  const [selectedDate, setSelectedDate] = useState(null) // date key for day view from calendar
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
     const saved = migrateProfile(getProfile())
-    if (saved) {
-      setProfile(saved)
-      setView('dashboard')
-    } else {
-      setView('onboarding')
-    }
+    if (saved) setProfile(saved)
+    setReady(true)
   }, [])
 
-  if (view === 'loading') {
+  if (!ready) {
     return (
       <div className="min-h-screen bg-surface-1 flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
@@ -71,32 +68,53 @@ function App() {
     )
   }
 
-  if (view === 'onboarding') {
+  if (!profile) {
     return (
       <Onboarding
         onComplete={(p) => {
           setProfile(p)
-          setView('dashboard')
+          setTab('home')
         }}
       />
     )
   }
 
-  if (view === 'settings') {
+  // Day view from calendar selection
+  if (selectedDate) {
     return (
-      <Settings
+      <Dashboard
         profile={profile}
-        onUpdate={(p) => setProfile(p)}
-        onClose={() => setView('dashboard')}
+        initialDate={selectedDate}
+        onBack={() => setSelectedDate(null)}
+        showBackButton
       />
     )
   }
 
   return (
-    <Dashboard
-      profile={profile}
-      onOpenSettings={() => setView('settings')}
-    />
+    <>
+      {tab === 'home' && (
+        <Home
+          profile={profile}
+          onSelectDay={(dateKey) => setSelectedDate(dateKey)}
+          onGoToday={() => setTab('today')}
+        />
+      )}
+      {tab === 'today' && (
+        <Dashboard
+          profile={profile}
+          onOpenSettings={() => setTab('settings')}
+        />
+      )}
+      {tab === 'settings' && (
+        <Settings
+          profile={profile}
+          onUpdate={(p) => setProfile(p)}
+          onClose={() => setTab('home')}
+        />
+      )}
+      <BottomNav active={tab} onChange={setTab} />
+    </>
   )
 }
 

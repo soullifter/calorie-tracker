@@ -45,9 +45,9 @@ const MEAL_ACCENTS = {
   snacks: 'text-pink-400 border-pink-500/30',
 }
 
-export default function Dashboard({ profile, onOpenSettings }) {
-  const [dateKey, setDateKey] = useState(getDateKey())
-  const [dayLog, setDayLog] = useState(getDayLog(dateKey))
+export default function Dashboard({ profile, onOpenSettings, initialDate, onBack, showBackButton }) {
+  const [dateKey, setDateKey] = useState(initialDate || getDateKey())
+  const [dayLog, setDayLog] = useState(getDayLog(initialDate || getDateKey()))
   const [addingMeal, setAddingMeal] = useState(null)
   const [addingExercise, setAddingExercise] = useState(false)
   const [showNutrients, setShowNutrients] = useState(false)
@@ -105,31 +105,44 @@ export default function Dashboard({ profile, onOpenSettings }) {
     : displayDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
 
   return (
-    <div className="min-h-screen bg-surface-1 pb-8">
+    <div className="min-h-screen bg-surface-1 pb-24">
       {/* Header */}
       <div className="sticky top-0 glass border-b border-white/5 px-4 py-3 z-10">
         <div className="flex items-center justify-between max-w-lg mx-auto">
-          <button
-            onClick={() => navigateDay(-1)}
-            className="w-9 h-9 rounded-xl bg-surface-3/50 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-3 transition"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
-          </button>
+          {showBackButton ? (
+            <button
+              onClick={onBack}
+              className="w-9 h-9 rounded-xl bg-surface-3/50 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-3 transition"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+          ) : (
+            <button
+              onClick={() => navigateDay(-1)}
+              className="w-9 h-9 rounded-xl bg-surface-3/50 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-3 transition"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+          )}
           <div className="text-center">
-            <p className="text-white font-semibold text-lg">{greeting}</p>
-            {isToday && (
-              <p className="text-xs text-gray-500">
-                {displayDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-              </p>
-            )}
+            <p className="text-white font-semibold text-lg">
+              {isToday ? 'Today' : displayDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+            </p>
+            <p className="text-xs text-gray-500">
+              {displayDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+            </p>
           </div>
-          <button
-            onClick={() => navigateDay(1)}
-            disabled={isToday}
-            className="w-9 h-9 rounded-xl bg-surface-3/50 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-3 transition disabled:opacity-20 disabled:hover:bg-transparent"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
-          </button>
+          {showBackButton ? (
+            <div className="w-9" />
+          ) : (
+            <button
+              onClick={() => navigateDay(1)}
+              disabled={isToday}
+              className="w-9 h-9 rounded-xl bg-surface-3/50 flex items-center justify-center text-gray-400 hover:text-white hover:bg-surface-3 transition disabled:opacity-20 disabled:hover:bg-transparent"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+          )}
         </div>
       </div>
 
@@ -354,17 +367,6 @@ export default function Dashboard({ profile, onOpenSettings }) {
           </div>
         </div>
 
-        {/* Settings */}
-        <button
-          onClick={onOpenSettings}
-          className="w-full py-3 rounded-xl bg-surface-2 text-sm text-gray-500 hover:text-gray-300 transition flex items-center justify-center gap-2"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-          </svg>
-          Settings
-        </button>
       </div>
     </div>
   )
