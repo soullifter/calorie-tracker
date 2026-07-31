@@ -185,7 +185,7 @@ Each exercise must have the SPECIFIC input fields needed to calculate calories:
 - Strength: weight(kg), sets, reps
 - Cardio: speed(km/h), duration(min), incline(%)
 - Bodyweight: sets, reps
-Include 2-5 exercises per muscle group. Only include muscle groups relevant to the equipment.`
+List ALL possible exercises for each muscle group — be comprehensive, not minimal. A flat bench alone can do 10+ chest exercises. Only include muscle groups relevant to the equipment.`
 
 export async function identifyExercise(keys, imageBase64) {
   return runWithFallback(VISION_CHAIN, keys, (provider) => {
