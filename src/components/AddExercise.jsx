@@ -119,6 +119,7 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
   // Quick flow state
   const [quickExercise, setQuickExercise] = useState('')
   const [quickDuration, setQuickDuration] = useState('30')
+  const [quickSteps, setQuickSteps] = useState('')
 
   const fileRef = useRef(null)
 
@@ -254,20 +255,24 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
     }
   }
 
+  const isWalking = quickExercise.toLowerCase().includes('walk')
+
   const handleQuickSubmit = async () => {
     if (!quickExercise.trim()) return
     setLoading(true)
     setError('')
     try {
       const dur = parseInt(quickDuration) || 30
-      const result = await estimateExerciseCalories(keys, quickExercise, dur, weightKg)
+      const steps = parseInt(quickSteps) || 0
+      const exerciseDesc = steps > 0 ? `${quickExercise} (${steps} steps)` : quickExercise
+      const result = await estimateExerciseCalories(keys, exerciseDesc, dur, weightKg)
       onAdd({
         id: `ex_${Date.now()}`,
         exercise: result.exercise || quickExercise,
         type: 'cardio',
-        muscleGroups: [],
-        params: { duration: dur },
-        summary: `${dur} min`,
+        muscleGroups: isWalking ? ['Legs'] : [],
+        params: { duration: dur, ...(steps > 0 ? { steps } : {}) },
+        summary: steps > 0 ? `${steps.toLocaleString()} steps \u00B7 ${dur} min` : `${dur} min`,
         durationMin: dur,
         caloriesBurned: result.caloriesBurned || 0,
         intensity: result.intensity || 'moderate',
@@ -396,6 +401,16 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
         <input type="text" placeholder="Or type exercise name..." value={quickExercise}
           onChange={(e) => setQuickExercise(e.target.value)}
           className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-700 focus:border-emerald-500 focus:outline-none" />
+
+        {isWalking && (
+          <div>
+            <label className="text-xs text-gray-400 mb-1 block">Steps</label>
+            <input type="text" inputMode="numeric" value={quickSteps}
+              onChange={(e) => setQuickSteps(e.target.value)}
+              placeholder="e.g. 5000"
+              className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-700 focus:border-emerald-500 focus:outline-none" />
+          </div>
+        )}
 
         <div>
           <label className="text-xs text-gray-400 mb-1 block">Duration (minutes)</label>
