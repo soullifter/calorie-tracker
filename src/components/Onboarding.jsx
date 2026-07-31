@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { ACTIVITY_LEVELS } from '../utils/constants'
 import { calculateBMR, calculateTDEE, calculateDailyTargets, calculateDeficit, getWeeklyLossRate } from '../utils/calculations'
 import { saveProfile } from '../utils/storage'
@@ -196,19 +196,28 @@ export default function Onboarding({ onComplete }) {
     onComplete(profile)
   }
 
-  const handleImport = () => {
-    const input = prompt('Paste your data here:')
-    if (!input) return
-    try {
-      const data = JSON.parse(input)
-      for (const [key, val] of Object.entries(data)) {
-        if (key.startsWith('ct_')) localStorage.setItem(key, val)
+  const importRef = useRef(null)
+
+  const handleImportFile = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result)
+        let count = 0
+        for (const [key, val] of Object.entries(data)) {
+          if (key.startsWith('ct_')) { localStorage.setItem(key, val); count++ }
+        }
+        if (count === 0) { alert('No valid data found in this file.'); return }
+        alert(`Restored ${count} items! Reloading...`)
+        window.location.reload()
+      } catch {
+        alert('Invalid file. Please select a valid backup file.')
       }
-      alert('Data imported! Reloading...')
-      window.location.reload()
-    } catch {
-      alert('Invalid data. Make sure you copied the full text.')
     }
+    reader.readAsText(file)
+    e.target.value = ''
   }
 
   return (
@@ -216,12 +225,15 @@ export default function Onboarding({ onComplete }) {
       <div className="w-full max-w-md">
         {/* Import existing data */}
         {step === 0 && (
-          <button
-            onClick={handleImport}
-            className="w-full mb-6 py-3 rounded-xl border border-dashed border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/20 text-sm transition"
-          >
-            Already have data? Tap to import
-          </button>
+          <>
+            <label
+              className="w-full mb-6 py-3 rounded-xl border border-dashed border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/20 text-sm transition flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+              Have a backup? Tap to restore
+              <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImportFile} />
+            </label>
+          </>
         )}
 
         {/* Progress bar */}

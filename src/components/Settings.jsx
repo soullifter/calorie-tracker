@@ -161,7 +161,7 @@ export default function Settings({ profile, onUpdate, onClose }) {
         {/* Data Transfer */}
         <div className="bg-gray-900 rounded-xl p-4 space-y-3">
           <h3 className="text-white font-medium">Transfer Data</h3>
-          <p className="text-xs text-gray-500">Copy your data to move it to the installed app or another browser</p>
+          <p className="text-xs text-gray-500">Download your data as a file, then upload it in the installed app or another browser</p>
           <div className="flex gap-2">
             <button
               onClick={() => {
@@ -170,41 +170,47 @@ export default function Settings({ profile, onUpdate, onClose }) {
                   const key = localStorage.key(i)
                   if (key.startsWith('ct_')) allData[key] = localStorage.getItem(key)
                 }
-                navigator.clipboard.writeText(JSON.stringify(allData))
-                  .then(() => alert('Data copied! Open the app where you want to transfer and paste it there.'))
-                  .catch(() => {
-                    const ta = document.createElement('textarea')
-                    ta.value = JSON.stringify(allData)
-                    document.body.appendChild(ta)
-                    ta.select()
-                    document.execCommand('copy')
-                    document.body.removeChild(ta)
-                    alert('Data copied!')
-                  })
+                const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `calorie-tracker-backup-${new Date().toISOString().split('T')[0]}.json`
+                a.click()
+                URL.revokeObjectURL(url)
               }}
               className="flex-1 py-3 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition text-sm font-medium"
             >
-              Copy All Data
+              Download Backup
             </button>
-            <button
-              onClick={() => {
-                const input = prompt('Paste your data here:')
-                if (!input) return
-                try {
-                  const data = JSON.parse(input)
-                  for (const [key, val] of Object.entries(data)) {
-                    if (key.startsWith('ct_')) localStorage.setItem(key, val)
+            <label className="flex-1 py-3 rounded-lg bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 transition text-sm font-medium text-center cursor-pointer">
+              Upload Backup
+              <input
+                type="file"
+                accept=".json"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  const reader = new FileReader()
+                  reader.onload = () => {
+                    try {
+                      const data = JSON.parse(reader.result)
+                      let count = 0
+                      for (const [key, val] of Object.entries(data)) {
+                        if (key.startsWith('ct_')) { localStorage.setItem(key, val); count++ }
+                      }
+                      if (count === 0) { alert('No valid data found in this file.'); return }
+                      alert(`Restored ${count} items! Reloading...`)
+                      window.location.reload()
+                    } catch {
+                      alert('Invalid file. Please select a valid backup file.')
+                    }
                   }
-                  alert('Data imported! Reloading...')
-                  window.location.reload()
-                } catch {
-                  alert('Invalid data. Make sure you copied the full text.')
-                }
-              }}
-              className="flex-1 py-3 rounded-lg bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 transition text-sm font-medium"
-            >
-              Import Data
-            </button>
+                  reader.readAsText(file)
+                  e.target.value = ''
+                }}
+              />
+            </label>
           </div>
         </div>
 
