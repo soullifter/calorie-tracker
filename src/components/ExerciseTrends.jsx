@@ -1,12 +1,15 @@
-import { useMemo } from 'react'
-import { getDateKey, sumNutrients } from '../utils/calculations'
+import { useState, useMemo } from 'react'
+import { getDateKey } from '../utils/calculations'
 import { getDayLog } from '../utils/storage'
-import { MEAL_TYPES } from '../utils/constants'
 
 const MUSCLE_GROUPS = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core']
 const MUSCLE_COLORS = {
-  Chest: 'bg-blue-500', Back: 'bg-indigo-500', Legs: 'bg-emerald-500',
-  Shoulders: 'bg-amber-500', Arms: 'bg-rose-500', Core: 'bg-purple-500',
+  Chest: { bg: 'bg-blue-500', text: 'text-blue-400', light: 'bg-blue-500/15' },
+  Back: { bg: 'bg-indigo-500', text: 'text-indigo-400', light: 'bg-indigo-500/15' },
+  Legs: { bg: 'bg-emerald-500', text: 'text-emerald-400', light: 'bg-emerald-500/15' },
+  Shoulders: { bg: 'bg-amber-500', text: 'text-amber-400', light: 'bg-amber-500/15' },
+  Arms: { bg: 'bg-rose-500', text: 'text-rose-400', light: 'bg-rose-500/15' },
+  Core: { bg: 'bg-purple-500', text: 'text-purple-400', light: 'bg-purple-500/15' },
 }
 
 function getLast7DaysData() {
@@ -20,6 +23,7 @@ function getLast7DaysData() {
     days.push({
       key,
       label: d.toLocaleDateString('en-US', { weekday: 'short' }),
+      date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       exercises: log.exercises || [],
       isToday: i === 0,
     })
@@ -38,6 +42,10 @@ function getLast30DaysExercises() {
     ;(log.exercises || []).forEach((ex) => all.push({ ...ex, dateKey: key }))
   }
   return all
+}
+
+function normalizeGroup(mg) {
+  return MUSCLE_GROUPS.find((g) => mg.toLowerCase().includes(g.toLowerCase())) || mg
 }
 
 // Weekly exercise frequency + calories burned chart
@@ -93,16 +101,186 @@ export function WeeklyExerciseChart() {
   )
 }
 
-// Muscle group heatmap — which groups hit this week
+// Muscle group detail view
+function MuscleGroupDetail({ group, onBack }) {
+  const days = useMemo(getLast7DaysData, [])
+  const allExercises = useMemo(getLast30DaysExercises, [])
+  const colors = MUSCLE_COLORS[group] || MUSCLE_COLORS.Chest
+
+  // This week's exercises for this group
+  const weekExercises = []
+  days.forEach((day) => {
+    day.exercises.forEach((ex) => {
+      const groups = (ex.muscleGroups || []).map(normalizeGroup)
+      if (groups.includes(group)) {
+        weekExercises.push({ ...ex, dayLabel: day.date })
+      }
+    })
+  })
+
+  // 30-day history for progressive overload
+  const exerciseHistory = {}
+  allExercises.forEach((ex) => {
+    const groups = (ex.muscleGroups || []).map(normalizeGroup)
+    if (!groups.includes(group)) return
+    if (!exerciseHistory[ex.exercise]) exerciseHistory[ex.exercise] = []
+    exerciseHistory[ex.exercise].push({
+      date: ex.dateKey,
+      dateLabel: new Date(ex.dateKey + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      weight: parseFloat(ex.params?.weight) || 0,
+      sets: parseInt(ex.params?.sets) || 0,
+      reps: parseInt(ex.params?.reps) || 0,
+      volume: (parseFloat(ex.params?.weight) || 0) * (parseInt(ex.params?.sets) || 1) * (parseInt(ex.params?.reps) || 1),
+      caloriesBurned: ex.caloriesBurned || 0,
+      summary: ex.summary || '',
+    })
+  })
+
+  const totalBurned = weekExercises.reduce((s, e) => s + (e.caloriesBurned || 0), 0)
+
+  return (
+    <div className="bg-surface-2 rounded-2xl p-5 animate-scale-in space-y-5">
+      {/* Header */}
+      <div>
+        <button onClick={onBack} className="text-gray-400 hover:text-white text-sm flex items-center gap-1 mb-3">
+          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+          All Groups
+        </button>
+        <div className="flex items-center gap-3">
+          <div className={`w-10 h-10 rounded-xl ${colors.bg} flex items-center justify-center`}>
+            <span className="text-white font-bold text-sm">{group[0]}</span>
+          </div>
+          <div>
+            <h3 className="text-white font-semibold text-lg">{group}</h3>
+            <p className="text-xs text-gray-500">{weekExercises.length} exercises this week \u00B7 {totalBurned} cal</p>
+          </div>
+        </div>
+      </div>
+
+      {/* This week's sessions */}
+      <div>
+        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">This Week</h4>
+        {weekExercises.length === 0 ? (
+          <p className="text-gray-600 text-sm">No {group.toLowerCase()} exercises this week</p>
+        ) : (
+          <div className="space-y-2">
+            {weekExercises.map((ex, i) => (
+              <div key={i} className={`${colors.light} rounded-xl px-4 py-3`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className={`text-sm font-medium ${colors.text}`}>{ex.exercise}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {ex.summary || `${ex.durationMin || 0} min`} \u00B7 {ex.dayLabel}
+                    </p>
+                  </div>
+                  <span className="text-sm font-semibold text-emerald-400 tabular-nums">-{ex.caloriesBurned}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Progressive overload per exercise */}
+      {Object.entries(exerciseHistory).map(([name, sessions]) => {
+        if (sessions.length < 1) return null
+
+        const hasWeight = sessions.some((s) => s.weight > 0)
+
+        // Volume chart data
+        const chartData = hasWeight ? sessions : sessions.map((s) => ({ ...s, weight: s.caloriesBurned }))
+        const values = chartData.map((s) => hasWeight ? s.weight : s.caloriesBurned)
+        const minV = Math.min(...values)
+        const maxV = Math.max(...values)
+        const range = maxV - minV || 1
+
+        const first = sessions[0]
+        const last = sessions[sessions.length - 1]
+        const weightDiff = hasWeight ? Math.round((last.weight - first.weight) * 10) / 10 : 0
+        const isUp = weightDiff > 0
+
+        return (
+          <div key={name}>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-medium text-gray-300">{name}</h4>
+              {sessions.length >= 2 && hasWeight && (
+                <span className={`text-xs font-semibold ${isUp ? 'text-emerald-400' : weightDiff < 0 ? 'text-red-400' : 'text-gray-500'}`}>
+                  {weightDiff > 0 ? '+' : ''}{weightDiff}kg
+                </span>
+              )}
+            </div>
+
+            {/* Chart */}
+            <div className="bg-surface-3 rounded-xl p-3">
+              <svg viewBox="0 0 100 40" className="w-full h-20" preserveAspectRatio="none">
+                {/* Grid lines */}
+                {[0, 25, 50, 75, 100].map((y) => (
+                  <line key={y} x1="0" x2="100" y1={y * 0.4} y2={y * 0.4} stroke="oklch(0.25 0.01 260)" strokeWidth="0.3" />
+                ))}
+                {/* Area fill */}
+                <polygon
+                  points={`0,40 ${chartData.map((s, i) => {
+                    const x = (i / Math.max(1, chartData.length - 1)) * 100
+                    const y = 40 - ((values[i] - minV) / range) * 35
+                    return `${x},${y}`
+                  }).join(' ')} 100,40`}
+                  fill={`${isUp ? 'rgba(52,211,153,0.1)' : 'rgba(107,114,128,0.1)'}`}
+                />
+                {/* Line */}
+                <polyline
+                  points={chartData.map((s, i) => {
+                    const x = (i / Math.max(1, chartData.length - 1)) * 100
+                    const y = 40 - ((values[i] - minV) / range) * 35
+                    return `${x},${y}`
+                  }).join(' ')}
+                  fill="none"
+                  stroke={isUp ? '#34d399' : '#6b7280'}
+                  strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+                />
+                {/* Dots */}
+                {chartData.map((s, i) => {
+                  const x = (i / Math.max(1, chartData.length - 1)) * 100
+                  const y = 40 - ((values[i] - minV) / range) * 35
+                  return <circle key={i} cx={x} cy={y} r="2" fill={isUp ? '#34d399' : '#6b7280'} />
+                })}
+              </svg>
+
+              {/* Session details */}
+              <div className="space-y-1.5 mt-2">
+                {sessions.map((s, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <span className="text-gray-500">{s.dateLabel}</span>
+                    <div className="flex items-center gap-3">
+                      {s.summary && <span className="text-gray-400">{s.summary}</span>}
+                      {hasWeight && <span className="text-white tabular-nums">{s.weight}kg</span>}
+                      {s.volume > 0 && <span className="text-gray-500 tabular-nums">vol: {s.volume}</span>}
+                      <span className="text-emerald-400 tabular-nums">-{s.caloriesBurned}cal</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )
+      })}
+
+      {Object.keys(exerciseHistory).length === 0 && (
+        <p className="text-gray-600 text-sm text-center py-2">No {group.toLowerCase()} history in the last 30 days</p>
+      )}
+    </div>
+  )
+}
+
+// Interactive muscle group map
 export function MuscleGroupMap() {
+  const [selectedGroup, setSelectedGroup] = useState(null)
   const days = useMemo(getLast7DaysData, [])
 
   const groupCounts = {}
   days.forEach((day) => {
     day.exercises.forEach((ex) => {
       ;(ex.muscleGroups || []).forEach((mg) => {
-        // Normalize group names
-        const normalized = MUSCLE_GROUPS.find((g) => mg.toLowerCase().includes(g.toLowerCase())) || mg
+        const normalized = normalizeGroup(mg)
         groupCounts[normalized] = (groupCounts[normalized] || 0) + 1
       })
     })
@@ -111,32 +289,37 @@ export function MuscleGroupMap() {
   const hasData = Object.keys(groupCounts).length > 0
   if (!hasData) return null
 
+  if (selectedGroup) {
+    return <MuscleGroupDetail group={selectedGroup} onBack={() => setSelectedGroup(null)} />
+  }
+
   const maxCount = Math.max(1, ...Object.values(groupCounts))
 
   return (
     <div className="bg-surface-2 rounded-2xl p-5 animate-fade-in">
-      <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Muscle Groups This Week</h3>
+      <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-1">Muscle Groups This Week</h3>
+      <p className="text-[10px] text-gray-600 mb-4">Tap a group for details</p>
       <div className="grid grid-cols-3 gap-2">
         {MUSCLE_GROUPS.map((group) => {
           const count = groupCounts[group] || 0
+          const colors = MUSCLE_COLORS[group]
           const opacity = count > 0 ? 0.3 + (count / maxCount) * 0.7 : 0.1
-          const color = MUSCLE_COLORS[group] || 'bg-gray-500'
 
           return (
-            <div
+            <button
               key={group}
-              className="rounded-xl p-3 text-center transition-all"
-              style={{ backgroundColor: `oklch(0.21 0.01 260 / ${count > 0 ? 1 : 0.5})` }}
+              onClick={() => setSelectedGroup(group)}
+              className={`rounded-xl p-3 text-center transition-all hover:ring-1 hover:ring-white/10 ${count > 0 ? 'bg-surface-3' : 'bg-surface-3/50'}`}
             >
               <div
-                className={`w-8 h-8 rounded-lg mx-auto flex items-center justify-center text-xs font-bold text-white ${color}`}
+                className={`w-10 h-10 rounded-xl mx-auto flex items-center justify-center text-sm font-bold text-white ${colors.bg}`}
                 style={{ opacity }}
               >
-                {count}
+                {count}x
               </div>
-              <p className={`text-[10px] mt-1.5 ${count > 0 ? 'text-gray-300' : 'text-gray-600'}`}>{group}</p>
-              {count === 0 && <p className="text-[8px] text-gray-700">not hit</p>}
-            </div>
+              <p className={`text-[11px] mt-2 font-medium ${count > 0 ? 'text-gray-200' : 'text-gray-600'}`}>{group}</p>
+              {count === 0 && <p className="text-[9px] text-gray-700">not hit</p>}
+            </button>
           )
         })}
       </div>
@@ -144,14 +327,13 @@ export function MuscleGroupMap() {
   )
 }
 
-// Progressive overload — track weight/volume increase for repeated exercises
+// Keep progressive overload as standalone for home page summary
 export function ProgressiveOverload() {
   const allExercises = useMemo(getLast30DaysExercises, [])
 
-  // Group by exercise name
   const exerciseHistory = {}
   allExercises.forEach((ex) => {
-    if (!ex.params?.weight) return // only track weighted exercises
+    if (!ex.params?.weight) return
     if (!exerciseHistory[ex.exercise]) exerciseHistory[ex.exercise] = []
     exerciseHistory[ex.exercise].push({
       date: ex.dateKey,
@@ -162,10 +344,9 @@ export function ProgressiveOverload() {
     })
   })
 
-  // Only show exercises done 2+ times
   const repeatedExercises = Object.entries(exerciseHistory)
     .filter(([_, sessions]) => sessions.length >= 2)
-    .slice(0, 5) // top 5
+    .slice(0, 5)
 
   if (repeatedExercises.length === 0) return null
 
@@ -176,11 +357,9 @@ export function ProgressiveOverload() {
         {repeatedExercises.map(([name, sessions]) => {
           const first = sessions[0]
           const last = sessions[sessions.length - 1]
-          const weightDiff = last.weight - first.weight
-          const volumeDiff = last.volume - first.volume
-          const isUp = weightDiff > 0 || volumeDiff > 0
+          const weightDiff = Math.round((last.weight - first.weight) * 10) / 10
+          const isUp = weightDiff > 0
 
-          // Mini sparkline
           const weights = sessions.map((s) => s.weight)
           const minW = Math.min(...weights)
           const maxW = Math.max(...weights)
@@ -201,12 +380,9 @@ export function ProgressiveOverload() {
               </div>
               <div className="flex items-center gap-3">
                 <svg viewBox="0 0 100 30" className="flex-1 h-8" preserveAspectRatio="none">
-                  <polyline
-                    points={points}
-                    fill="none"
+                  <polyline points={points} fill="none"
                     stroke={isUp ? '#34d399' : weightDiff < 0 ? '#f87171' : '#6b7280'}
-                    strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-                  />
+                    strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   {sessions.map((s, i) => {
                     const x = (i / Math.max(1, sessions.length - 1)) * 100
                     const y = 100 - ((s.weight - minW) / range) * 100
