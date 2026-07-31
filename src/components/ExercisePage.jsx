@@ -111,24 +111,35 @@ export default function ExercisePage({ profile }) {
 
             {exercises.map((ex, i) => (
               <div key={ex.id} className="py-3 border-b border-white/5 last:border-0 animate-fade-in" style={{ animationDelay: `${i * 50}ms` }}>
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-200">{ex.exercise}</p>
-                    <div className="flex items-center gap-3 mt-1">
-                      <span className="text-xs text-gray-500 flex items-center gap-1">
-                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-                        {ex.durationMin} min
-                      </span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                    {ex.summary && (
+                      <p className="text-xs text-gray-400 mt-0.5">{ex.summary}</p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                      {ex.type && (
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                          ex.type === 'strength' ? 'bg-blue-500/15 text-blue-400' :
+                          ex.type === 'cardio' ? 'bg-emerald-500/15 text-emerald-400' :
+                          ex.type === 'bodyweight' ? 'bg-amber-500/15 text-amber-400' :
+                          'bg-purple-500/15 text-purple-400'
+                        }`}>{ex.type}</span>
+                      )}
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${
                         ex.intensity === 'high' ? 'bg-red-500/15 text-red-400' :
                         ex.intensity === 'moderate' ? 'bg-amber-500/15 text-amber-400' :
                         'bg-emerald-500/15 text-emerald-400'
-                      }`}>
-                        {ex.intensity}
-                      </span>
+                      }`}>{ex.intensity}</span>
+                      {(ex.muscleGroups || []).slice(0, 2).map((mg) => (
+                        <span key={mg} className="text-[10px] text-gray-600">{mg}</span>
+                      ))}
+                      {ex.durationMin > 0 && (
+                        <span className="text-[10px] text-gray-500">{ex.durationMin} min</span>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-3 shrink-0 ml-3">
                     <div className="text-right">
                       <p className="text-sm font-semibold text-emerald-400 tabular-nums">-{ex.caloriesBurned}</p>
                       <p className="text-[10px] text-gray-600">cal</p>
@@ -149,6 +160,7 @@ export default function ExercisePage({ profile }) {
                 <AddExercise
                   keys={{ geminiKey: profile.geminiApiKey, groqKey: profile.groqApiKey }}
                   weightKg={profile.weightKg}
+                  heightCm={profile.heightCm}
                   onAdd={handleAdd}
                   onClose={() => setAdding(false)}
                 />

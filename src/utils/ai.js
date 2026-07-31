@@ -178,3 +178,43 @@ export async function estimateExerciseCalories(keys, exercise, durationMin, weig
     }
   })
 }
+
+const EXERCISE_PHOTO_PROMPT = `Identify the exercise equipment, machine, or activity in this photo. Return JSON:
+{"name":"str (e.g. 'Lat Pulldown Machine', 'Treadmill', 'Barbell Bench Press', 'Yoga Mat')","type":"strength|cardio|bodyweight|flexibility|sport","muscleGroups":["str"],"fields":[{"key":"str","label":"str","type":"number|select","unit":"str_or_null","options":["str"]_or_null,"default":num_or_null}]}
+The "fields" array must contain the SPECIFIC inputs needed to calculate calories for THIS exercise. Examples:
+- Weight machine: [{"key":"weight","label":"Weight","type":"number","unit":"kg"},{"key":"sets","label":"Sets","type":"number"},{"key":"reps","label":"Reps per set","type":"number"}]
+- Treadmill: [{"key":"speed","label":"Speed","type":"number","unit":"km/h"},{"key":"duration","label":"Duration","type":"number","unit":"min"},{"key":"incline","label":"Incline","type":"number","unit":"%","default":0}]
+- Swimming: [{"key":"duration","label":"Duration","type":"number","unit":"min"},{"key":"stroke","label":"Stroke","type":"select","options":["freestyle","backstroke","breaststroke","butterfly"]}]
+- Bodyweight: [{"key":"sets","label":"Sets","type":"number"},{"key":"reps","label":"Reps per set","type":"number"}]
+Always include a duration or sets/reps field. Be specific to the identified exercise.`
+
+export async function identifyExercise(keys, imageBase64) {
+  return runWithFallback(VISION_CHAIN, keys, (provider) => {
+    if (provider === 'gemini') {
+      return { prompt: EXERCISE_PHOTO_PROMPT, imageBase64 }
+    }
+    return {
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: EXERCISE_PHOTO_PROMPT },
+          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
+        ],
+      }],
+    }
+  })
+}
+
+export async function calculateExerciseCalories(keys, exerciseData, userWeightKg, userHeightCm) {
+  const params = Object.entries(exerciseData.params).map(([k, v]) => `${k}: ${v}`).join(', ')
+  const prompt = `Calculate calories burned. Return JSON: {"caloriesBurned":number,"intensity":"low|moderate|high","summary":"str (brief description like '3x12 @ 50kg' or '20 min @ 8km/h')"}. Exercise: ${exerciseData.name} (${exerciseData.type}). Parameters: ${params}. Person: ${userWeightKg}kg, ${userHeightCm}cm. Use MET values and exercise science. Be realistic and accurate.`
+
+  return runWithFallback(TEXT_CHAIN, keys, (provider) => {
+    if (provider === 'gemini') {
+      return { prompt }
+    }
+    return {
+      messages: [{ role: 'user', content: prompt }],
+    }
+  })
+}
