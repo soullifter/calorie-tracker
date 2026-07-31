@@ -150,11 +150,11 @@ export default function Dashboard({ profile, onOpenSettings }) {
           </div>
         </div>
 
-        {/* Macro Cards */}
-        <div className="grid grid-cols-3 gap-3">
-          <MacroBar label="Protein" current={totals.protein || 0} target={profile.targets.protein} color="bg-blue-500" gradient="bg-gradient-to-br from-blue-500/30 to-blue-600/30 text-blue-400" />
-          <MacroBar label="Carbs" current={totals.carbs || 0} target={profile.targets.carbs} color="bg-amber-500" gradient="bg-gradient-to-br from-amber-500/30 to-amber-600/30 text-amber-400" />
-          <MacroBar label="Fat" current={totals.fat || 0} target={profile.targets.fat} color="bg-orange-500" gradient="bg-gradient-to-br from-orange-500/30 to-orange-600/30 text-orange-400" />
+        {/* Macros */}
+        <div className="bg-surface-2 rounded-2xl p-5 space-y-5">
+          <MacroBar label="Protein" current={totals.protein || 0} target={profile.targets.protein} color="bg-blue-500" iconColor="text-blue-400" />
+          <MacroBar label="Carbs" current={totals.carbs || 0} target={profile.targets.carbs} color="bg-amber-500" iconColor="text-amber-400" />
+          <MacroBar label="Fat" current={totals.fat || 0} target={profile.targets.fat} color="bg-orange-500" iconColor="text-orange-400" />
         </div>
 
         {/* Detailed Nutrients */}
