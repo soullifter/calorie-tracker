@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { ACTIVITY_LEVELS } from '../utils/constants'
-import { calculateBMR, calculateTDEE, calculateDailyTargets } from '../utils/calculations'
+import { calculateBMR, calculateTDEE, calculateDailyTargets, calculateDeficit, getDateKey } from '../utils/calculations'
 import { saveProfile, getWeightLog, addWeightEntry } from '../utils/storage'
-import { getDateKey } from '../utils/calculations'
 
 export default function Settings({ profile, onUpdate, onClose }) {
   const [form, setForm] = useState({ ...profile })
@@ -18,11 +17,13 @@ export default function Settings({ profile, onUpdate, onClose }) {
     const age = parseInt(form.age)
     const activity = ACTIVITY_LEVELS.find((l) => l.id === form.activityLevel)
 
+    const targetWeight = parseFloat(form.targetWeightKg)
     const bmr = calculateBMR(form.gender, weight, height, age)
     const tdee = calculateTDEE(bmr, activity.factor)
-    const targets = calculateDailyTargets(tdee, 'lose')
+    const deficit = weight > targetWeight && form.targetDate ? calculateDeficit(weight, targetWeight, form.targetDate) : 0
+    const targets = calculateDailyTargets(tdee, deficit, weight)
 
-    const updated = { ...form, bmr: Math.round(bmr), tdee, targets }
+    const updated = { ...form, bmr: Math.round(bmr), tdee, deficit, targets }
     saveProfile(updated)
     onUpdate(updated)
     setSaved(true)
@@ -69,6 +70,11 @@ export default function Settings({ profile, onUpdate, onClose }) {
           <input type="number" value={form.targetWeightKg} onChange={(e) => update('targetWeightKg', e.target.value)}
             placeholder="Target weight (kg)"
             className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-700 focus:outline-none" />
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Reach target by</label>
+            <input type="date" value={form.targetDate || ''} onChange={(e) => update('targetDate', e.target.value)}
+              className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-700 focus:outline-none" />
+          </div>
 
           <select value={form.activityLevel} onChange={(e) => update('activityLevel', e.target.value)}
             className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-700 focus:outline-none">

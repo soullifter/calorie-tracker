@@ -1,12 +1,14 @@
-import { NUTRIENTS, DAILY_RDA } from '../utils/constants'
+import { NUTRIENTS, getDailyRDA } from '../utils/constants'
 
-export default function NutrientDetails({ totals, targets }) {
+export default function NutrientDetails({ totals, targets, gender }) {
+  const rda = getDailyRDA(gender, targets.calories)
+
   const allTargets = {
     calories: targets.calories,
     protein: targets.protein,
     carbs: targets.carbs,
     fat: targets.fat,
-    ...DAILY_RDA,
+    ...rda,
   }
 
   return (

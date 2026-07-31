@@ -14,9 +14,6 @@ export const MEAL_LABELS = {
   snacks: 'Snacks',
 }
 
-// Macro split for weight loss: 30% protein, 40% carbs, 30% fat
-export const MACRO_SPLIT = { protein: 0.3, carbs: 0.4, fat: 0.3 }
-
 // Calories per gram
 export const CAL_PER_GRAM = { protein: 4, carbs: 4, fat: 9 }
 
@@ -42,20 +39,34 @@ export const NUTRIENTS = [
   { key: 'vitaminD', label: 'Vitamin D', unit: 'mcg' },
 ]
 
-// Daily recommended values (adult male, general guidelines)
-export const DAILY_RDA = {
-  fiber: 30,
-  sugar: 36,
-  sodium: 2300,
-  cholesterol: 300,
-  potassium: 3400,
-  calcium: 1000,
-  iron: 8,
-  vitaminA: 900,
-  vitaminC: 90,
-  vitaminD: 15,
-  saturatedFat: 22, // ~10% of 2000 cal
-  transFat: 0,
-  polyunsaturatedFat: 22,
-  monounsaturatedFat: 22,
+// Gender-aware RDA values (sources: FDA, NIH, AHA)
+// Returns daily targets based on gender and calorie target
+export function getDailyRDA(gender, dailyCalories) {
+  const isMale = gender === 'male'
+
+  return {
+    // Fat sub-targets derived from actual calorie target
+    saturatedFat: Math.round(dailyCalories * 0.10 / 9),  // <10% of calories (AHA)
+    transFat: 0,                                           // as low as possible (WHO)
+    polyunsaturatedFat: Math.round(dailyCalories * 0.08 / 9), // 6-10% of calories
+    monounsaturatedFat: Math.round(dailyCalories * 0.12 / 9), // remainder of fat budget
+
+    // Fiber: 14g per 1000 cal (IOM)
+    fiber: Math.round(dailyCalories * 14 / 1000),
+
+    // Sugar: AHA recommends 36g men, 25g women
+    sugar: isMale ? 36 : 25,
+
+    // Minerals
+    sodium: 2300,                    // FDA, same for both
+    cholesterol: 300,                // FDA, same for both
+    potassium: isMale ? 3400 : 2600, // NIH
+    calcium: 1000,                   // NIH (19-50 age)
+    iron: isMale ? 8 : 18,          // NIH (women need more due to menstruation)
+
+    // Vitamins
+    vitaminA: isMale ? 900 : 700,   // NIH (mcg RAE)
+    vitaminC: isMale ? 90 : 75,     // NIH
+    vitaminD: 15,                    // NIH (600 IU = 15mcg, same for both)
+  }
 }
