@@ -55,7 +55,9 @@ function ServingAdjuster({ food, onConfirm, onBack, confirmLabel }) {
   const hasUnit = food.servingUnit && food.servingUnitAmount
   const [inputMode, setInputMode] = useState('servings') // 'servings' or 'unit'
   const [servings, setServings] = useState(1)
+  const [servingsText, setServingsText] = useState('1')
   const [unitQty, setUnitQty] = useState(food.servingUnitAmount || 100)
+  const [unitQtyText, setUnitQtyText] = useState(String(food.servingUnitAmount || 100))
 
   const unitLabel = hasUnit ? (UNIT_LABELS[food.servingUnit] || food.servingUnit) : 'g'
   const unitStep = hasUnit ? (UNIT_STEPS[food.servingUnit] || 1) : 10
@@ -102,19 +104,27 @@ function ServingAdjuster({ food, onConfirm, onBack, confirmLabel }) {
           <label className="text-sm text-gray-400">How many servings?</label>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setServings(Math.max(0.1, +(servings - 0.25).toFixed(2)))}
+              onClick={() => { const v = Math.max(0.1, +(servings - 0.25).toFixed(2)); setServings(v); setServingsText(String(v)) }}
               className="w-10 h-10 rounded-lg bg-gray-800 text-white text-xl hover:bg-gray-700"
             >-</button>
             <input
-              type="number"
-              value={servings}
-              onChange={(e) => setServings(Math.max(0.1, parseFloat(e.target.value) || 0.1))}
-              step="0.1"
-              min="0.1"
+              type="text"
+              inputMode="decimal"
+              value={servingsText}
+              onChange={(e) => {
+                setServingsText(e.target.value)
+                const v = parseFloat(e.target.value)
+                if (!isNaN(v) && v > 0) setServings(v)
+              }}
+              onBlur={() => {
+                const v = parseFloat(servingsText)
+                if (isNaN(v) || v <= 0) { setServings(1); setServingsText('1') }
+                else { setServings(v); setServingsText(String(v)) }
+              }}
               className="w-24 text-center p-2 rounded-lg bg-gray-800 text-white border border-gray-700 focus:outline-none"
             />
             <button
-              onClick={() => setServings(+(servings + 0.25).toFixed(2))}
+              onClick={() => { const v = +(servings + 0.25).toFixed(2); setServings(v); setServingsText(String(v)) }}
               className="w-10 h-10 rounded-lg bg-gray-800 text-white text-xl hover:bg-gray-700"
             >+</button>
           </div>
@@ -124,19 +134,27 @@ function ServingAdjuster({ food, onConfirm, onBack, confirmLabel }) {
           <label className="text-sm text-gray-400">How much ({unitLabel})?</label>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setUnitQty(Math.max(unitStep, +(unitQty - unitStep).toFixed(1)))}
+              onClick={() => { const v = Math.max(1, +(unitQty - unitStep).toFixed(1)); setUnitQty(v); setUnitQtyText(String(v)) }}
               className="w-10 h-10 rounded-lg bg-gray-800 text-white text-xl hover:bg-gray-700"
             >-</button>
             <input
-              type="number"
-              value={unitQty}
-              onChange={(e) => setUnitQty(Math.max(1, parseFloat(e.target.value) || 1))}
-              step={unitStep}
-              min="1"
+              type="text"
+              inputMode="decimal"
+              value={unitQtyText}
+              onChange={(e) => {
+                setUnitQtyText(e.target.value)
+                const v = parseFloat(e.target.value)
+                if (!isNaN(v) && v > 0) setUnitQty(v)
+              }}
+              onBlur={() => {
+                const v = parseFloat(unitQtyText)
+                if (isNaN(v) || v <= 0) { setUnitQty(1); setUnitQtyText('1') }
+                else { setUnitQty(v); setUnitQtyText(String(v)) }
+              }}
               className="w-24 text-center p-2 rounded-lg bg-gray-800 text-white border border-gray-700 focus:outline-none"
             />
             <button
-              onClick={() => setUnitQty(+(unitQty + unitStep).toFixed(1))}
+              onClick={() => { const v = +(unitQty + unitStep).toFixed(1); setUnitQty(v); setUnitQtyText(String(v)) }}
               className="w-10 h-10 rounded-lg bg-gray-800 text-white text-xl hover:bg-gray-700"
             >+</button>
             <span className="text-gray-400 text-sm">{unitLabel}</span>
