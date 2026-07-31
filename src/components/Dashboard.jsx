@@ -51,6 +51,7 @@ export default function Dashboard({ profile, onOpenSettings }) {
   const [addingMeal, setAddingMeal] = useState(null)
   const [addingExercise, setAddingExercise] = useState(false)
   const [showNutrients, setShowNutrients] = useState(false)
+  const [expandedEntry, setExpandedEntry] = useState(null) // logId of expanded food item
 
   useEffect(() => {
     setDayLog(getDayLog(dateKey))
@@ -193,26 +194,84 @@ export default function Dashboard({ profile, onOpenSettings }) {
               </div>
 
               <div className="px-5 pb-4">
-                {mealEntries.map((entry) => (
-                  <div key={entry.logId} className="flex items-center justify-between py-3 border-b border-white/5 last:border-0">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-gray-200 truncate">{entry.name}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {entry.servings !== 1 ? `${entry.servings} servings` : '1 serving'}
-                        {entry.nutrients.protein != null && ` \u00B7 P:${Math.round(entry.nutrients.protein)}g`}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0 ml-3">
-                      <span className="text-sm font-medium text-gray-300 tabular-nums">{Math.round(entry.nutrients.calories)}</span>
-                      <button
-                        onClick={() => handleRemoveFood(meal, entry.logId)}
-                        className="w-6 h-6 rounded-lg flex items-center justify-center text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition"
+                {mealEntries.map((entry) => {
+                  const isExpanded = expandedEntry === entry.logId
+                  const n = entry.nutrients
+                  return (
+                    <div key={entry.logId} className="border-b border-white/5 last:border-0">
+                      <div
+                        className="flex items-center justify-between py-3 cursor-pointer"
+                        onClick={() => setExpandedEntry(isExpanded ? null : entry.logId)}
                       >
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                      </button>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm text-gray-200 truncate">{entry.name}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {entry.servings !== 1 ? `${entry.servings} servings` : '1 serving'}
+                            {n.protein != null && ` \u00B7 P:${Math.round(n.protein)}g`}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0 ml-3">
+                          <span className="text-sm font-medium text-gray-300 tabular-nums">{Math.round(n.calories)}</span>
+                          <svg className={`w-3.5 h-3.5 text-gray-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+                        </div>
+                      </div>
+                      {isExpanded && (
+                        <div className="pb-3 animate-scale-in">
+                          <div className="bg-surface-3 rounded-xl p-3 space-y-2">
+                            {/* Main macros */}
+                            <div className="grid grid-cols-4 gap-2 text-center">
+                              {[
+                                { label: 'Cal', val: n.calories, color: 'text-white' },
+                                { label: 'Protein', val: n.protein, u: 'g', color: 'text-blue-400' },
+                                { label: 'Carbs', val: n.carbs, u: 'g', color: 'text-amber-400' },
+                                { label: 'Fat', val: n.fat, u: 'g', color: 'text-orange-400' },
+                              ].map((m) => (
+                                <div key={m.label}>
+                                  <p className={`text-sm font-semibold tabular-nums ${m.color}`}>
+                                    {m.val != null ? Math.round(m.val) : '-'}{m.u || ''}
+                                  </p>
+                                  <p className="text-[10px] text-gray-500 uppercase">{m.label}</p>
+                                </div>
+                              ))}
+                            </div>
+                            {/* Detailed breakdown */}
+                            <div className="border-t border-white/5 pt-2 grid grid-cols-2 gap-x-4 gap-y-1">
+                              {[
+                                { label: 'Saturated Fat', val: n.saturatedFat, u: 'g' },
+                                { label: 'Trans Fat', val: n.transFat, u: 'g' },
+                                { label: 'Polyunsat. Fat', val: n.polyunsaturatedFat, u: 'g' },
+                                { label: 'Monounsat. Fat', val: n.monounsaturatedFat, u: 'g' },
+                                { label: 'Fiber', val: n.fiber, u: 'g' },
+                                { label: 'Sugar', val: n.sugar, u: 'g' },
+                                { label: 'Sodium', val: n.sodium, u: 'mg' },
+                                { label: 'Cholesterol', val: n.cholesterol, u: 'mg' },
+                                { label: 'Potassium', val: n.potassium, u: 'mg' },
+                                { label: 'Calcium', val: n.calcium, u: 'mg' },
+                                { label: 'Iron', val: n.iron, u: 'mg' },
+                                { label: 'Vitamin A', val: n.vitaminA, u: 'mcg' },
+                                { label: 'Vitamin C', val: n.vitaminC, u: 'mg' },
+                                { label: 'Vitamin D', val: n.vitaminD, u: 'mcg' },
+                              ].filter((x) => x.val != null).map((x) => (
+                                <div key={x.label} className="flex justify-between text-xs py-0.5">
+                                  <span className="text-gray-500">{x.label}</span>
+                                  <span className="text-gray-400 tabular-nums">{Math.round(x.val * 10) / 10}{x.u}</span>
+                                </div>
+                              ))}
+                            </div>
+                            {/* Delete button */}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleRemoveFood(meal, entry.logId); setExpandedEntry(null) }}
+                              className="w-full py-2 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition flex items-center justify-center gap-1.5 mt-1"
+                            >
+                              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4h8v2m-7 5v6m4-6v6M5 6l1 14h12l1-14"/></svg>
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
 
                 {addingMeal === meal ? (
                   <div className="mt-3 animate-scale-in">
