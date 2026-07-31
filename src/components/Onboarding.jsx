@@ -74,18 +74,23 @@ export default function Onboarding({ onComplete }) {
           className={inputClass} />
       </div>
       {/* Preview plan */}
-      {form.weightKg && form.targetWeightKg && form.targetDate && parseFloat(form.weightKg) > parseFloat(form.targetWeightKg) && (() => {
-        const deficit = calculateDeficit(parseFloat(form.weightKg), parseFloat(form.targetWeightKg), form.targetDate)
+      {form.weightKg && form.targetWeightKg && parseFloat(form.weightKg) > parseFloat(form.targetWeightKg) && (() => {
+        const hasDate = !!form.targetDate
+        const deficit = hasDate
+          ? calculateDeficit(parseFloat(form.weightKg), parseFloat(form.targetWeightKg), form.targetDate)
+          : 500
         const rate = getWeeklyLossRate(deficit)
         const weeks = Math.round((parseFloat(form.weightKg) - parseFloat(form.targetWeightKg)) / rate)
         const isSafe = rate <= 1
         return (
           <div className={`rounded-xl p-3 text-sm ${isSafe ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-amber-500/10 border border-amber-500/20'}`}>
             <p className={isSafe ? 'text-emerald-400' : 'text-amber-400'}>
-              ~{rate} kg/week over {weeks} weeks
+              ~{rate} kg/week {hasDate ? `over ${weeks} weeks` : '(default pace)'}
             </p>
             <p className="text-xs text-gray-500 mt-1">
-              Daily deficit: {deficit} cal {!isSafe && ' (aggressive — consider extending your timeline)'}
+              Daily deficit: {deficit} cal
+              {!hasDate && ' \u00B7 Set a date above for a custom plan'}
+              {hasDate && !isSafe && ' (aggressive — consider extending your timeline)'}
             </p>
           </div>
         )
@@ -155,7 +160,7 @@ export default function Onboarding({ onComplete }) {
 
   const canNext = () => {
     if (step === 0) return form.name && form.age && form.heightCm
-    if (step === 1) return form.weightKg && form.targetWeightKg && form.targetDate
+    if (step === 1) return form.weightKg && form.targetWeightKg
     if (step === 2) return form.geminiApiKey
     return false
   }
@@ -169,7 +174,9 @@ export default function Onboarding({ onComplete }) {
     const targetWeight = parseFloat(form.targetWeightKg)
     const bmr = calculateBMR(form.gender, weight, height, age)
     const tdee = calculateTDEE(bmr, activity.factor)
-    const deficit = weight > targetWeight ? calculateDeficit(weight, targetWeight, form.targetDate) : 0
+    const deficit = weight > targetWeight
+      ? (form.targetDate ? calculateDeficit(weight, targetWeight, form.targetDate) : 500)
+      : 0
     const targets = calculateDailyTargets(tdee, deficit, weight)
 
     const profile = {

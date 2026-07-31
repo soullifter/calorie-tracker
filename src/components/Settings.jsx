@@ -20,7 +20,9 @@ export default function Settings({ profile, onUpdate, onClose }) {
     const targetWeight = parseFloat(form.targetWeightKg)
     const bmr = calculateBMR(form.gender, weight, height, age)
     const tdee = calculateTDEE(bmr, activity.factor)
-    const deficit = weight > targetWeight && form.targetDate ? calculateDeficit(weight, targetWeight, form.targetDate) : 0
+    const deficit = weight > targetWeight
+      ? (form.targetDate ? calculateDeficit(weight, targetWeight, form.targetDate) : 500)
+      : 0
     const targets = calculateDailyTargets(tdee, deficit, weight)
 
     const updated = { ...form, bmr: Math.round(bmr), tdee, deficit, targets }
