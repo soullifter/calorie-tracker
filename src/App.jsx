@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getProfile, saveProfile } from './utils/storage'
+import { getProfile, saveProfile, migrateExercisesToLibrary } from './utils/storage'
 import { calculateBMR, calculateTDEE, calculateDailyTargets, calculateDeficit, getDateKey } from './utils/calculations'
 import { ACTIVITY_LEVELS } from './utils/constants'
 import Onboarding from './components/Onboarding'
@@ -58,6 +58,7 @@ function App() {
   useEffect(() => {
     const saved = migrateProfile(getProfile())
     if (saved) setProfile(saved)
+    migrateExercisesToLibrary()
     setReady(true)
   }, [])
 

@@ -52,13 +52,46 @@ export function getExerciseLibrary() {
 }
 export function saveExerciseToLibrary(exercise) {
   const lib = getExerciseLibrary()
-  const existing = lib.findIndex((e) => e.id === exercise.id)
+  // Match by name (case-insensitive) to avoid duplicates
+  const nameKey = (exercise.name || '').toLowerCase().trim()
+  const existing = lib.findIndex((e) => (e.name || '').toLowerCase().trim() === nameKey)
   if (existing >= 0) {
-    lib[existing] = { ...lib[existing], ...exercise, lastUsed: Date.now() }
+    // Merge: update with latest data but keep the original id
+    lib[existing] = { ...lib[existing], ...exercise, id: lib[existing].id, lastUsed: Date.now() }
   } else {
-    lib.push({ ...exercise, lastUsed: Date.now() })
+    lib.push({ ...exercise, id: exercise.id || `exlib_${Date.now()}`, lastUsed: Date.now() })
   }
   set(KEYS.exerciseLibrary, lib)
+}
+
+// Migrate all exercises from daily logs into the library
+export function migrateExercisesToLibrary() {
+  const logs = get(KEYS.dailyLogs) || {}
+  const lib = getExerciseLibrary()
+  const existingNames = new Set(lib.map((e) => (e.name || '').toLowerCase().trim()))
+  let added = 0
+
+  for (const dayLog of Object.values(logs)) {
+    for (const ex of (dayLog.exercises || [])) {
+      const nameKey = (ex.exercise || '').toLowerCase().trim()
+      if (!nameKey || existingNames.has(nameKey)) continue
+      existingNames.add(nameKey)
+      lib.push({
+        id: `exlib_${nameKey.replace(/\s+/g, '_')}`,
+        name: ex.exercise,
+        equipment: ex.equipment || null,
+        type: ex.type || 'cardio',
+        muscleGroups: ex.muscleGroups || [],
+        fields: ex.fields || [],
+        defaultParams: ex.params || {},
+        lastUsed: ex.loggedAt || Date.now(),
+      })
+      added++
+    }
+  }
+
+  if (added > 0) set(KEYS.exerciseLibrary, lib)
+  return added
 }
 export function removeExerciseFromLibrary(exerciseId) {
   const lib = getExerciseLibrary().filter((e) => e.id !== exerciseId)
