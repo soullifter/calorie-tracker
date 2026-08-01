@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { analyzeNutritionLabel, analyzeFoodPhoto } from '../utils/ai'
+import { analyzeNutritionLabel, analyzeFoodPhoto, describeFood } from '../utils/ai'
 import { getFoodLibrary, saveFoodToLibrary } from '../utils/storage'
 import { NUTRIENTS } from '../utils/constants'
 
@@ -291,12 +291,13 @@ function MultiItemPicker({ items, onConfirm, onBack }) {
 }
 
 export default function AddFood({ mealType, keys, onAdd, onClose }) {
-  const [mode, setMode] = useState('choose') // choose | history | adjust | multi | added
+  const [mode, setMode] = useState('choose') // choose | history | adjust | multi | added | describe
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [scannedFood, setScannedFood] = useState(null)
   const [multiItems, setMultiItems] = useState([])
   const [addedCount, setAddedCount] = useState(0)
+  const [describeText, setDescribeText] = useState('')
   const fileRef = useRef(null)
 
   const resetForAnother = () => {
@@ -467,6 +468,68 @@ export default function AddFood({ mealType, keys, onAdd, onClose }) {
     )
   }
 
+  if (mode === 'describe') {
+    const handleDescribeSubmit = async () => {
+      if (!describeText.trim()) return
+      setLoading(true)
+      setError('')
+      try {
+        const result = await describeFood(keys, describeText)
+        const items = (result.items || []).map((item, i) => ({
+          id: `food_${Date.now()}_${i}`,
+          name: item.name || 'Unknown Item',
+          servingSize: item.estimatedServingSize || '1 serving',
+          servingWeightG: item.servingWeightG || null,
+          servingUnit: item.servingUnit || 'g',
+          servingUnitAmount: item.servingUnitAmount || 100,
+          nutrients: item.nutrients,
+          confidence: item.confidence,
+          source: 'describe',
+          isSupplement: item.isSupplement || false,
+        }))
+        items.forEach((item) => saveFoodToLibrary(item))
+        if (items.length === 1) {
+          setScannedFood(items[0])
+          setMode('adjust')
+        } else if (items.length > 1) {
+          setMultiItems(items)
+          setMode('multi')
+        } else {
+          setError('Could not identify any food from description')
+        }
+      } catch (err) {
+        setError(err.message || 'Failed to analyze description')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    return (
+      <div className="bg-gray-900 rounded-xl p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white capitalize">Describe Food</h3>
+          <button onClick={() => setMode('choose')} className="text-gray-400 hover:text-white text-xl">&times;</button>
+        </div>
+        <textarea
+          value={describeText}
+          onChange={(e) => setDescribeText(e.target.value)}
+          placeholder="e.g. 'Two eggs with toast and butter', 'A bowl of chicken biryani', 'Protein shake with banana and milk'..."
+          rows={3}
+          className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-700 focus:border-blue-500 focus:outline-none resize-none"
+        />
+        {error && (
+          <div className="bg-red-900/30 border border-red-800 rounded-lg p-3">
+            <p className="text-red-400 text-sm">{error}</p>
+          </div>
+        )}
+        <button onClick={handleDescribeSubmit} disabled={!describeText.trim() || loading}
+          className="w-full py-3 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-500 transition disabled:opacity-50">
+          {loading ? 'Analyzing...' : 'Identify Food'}
+        </button>
+      </div>
+    )
+  }
+
   if (mode === 'history') {
     return (
       <div className="bg-gray-900 rounded-xl p-5">
@@ -525,8 +588,16 @@ export default function AddFood({ mealType, keys, onAdd, onClose }) {
           </button>
 
           <button
-            onClick={() => setMode('history')}
+            onClick={() => setMode('describe')}
             className="p-4 rounded-lg bg-gray-800 border border-gray-700 hover:border-purple-500 text-left transition"
+          >
+            <p className="text-white font-medium">Describe Food</p>
+            <p className="text-xs text-gray-400 mt-1">Tell AI what you ate in words</p>
+          </button>
+
+          <button
+            onClick={() => setMode('history')}
+            className="p-4 rounded-lg bg-gray-800 border border-gray-700 hover:border-amber-500 text-left transition"
           >
             <p className="text-white font-medium">Pick from History</p>
             <p className="text-xs text-gray-400 mt-1">Re-add a previously logged food</p>

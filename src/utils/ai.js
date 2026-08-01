@@ -166,6 +166,19 @@ export async function analyzeFoodPhoto(keys, imageBase64) {
   })
 }
 
+export async function describeFood(keys, description) {
+  const prompt = `The user describes food they ate: "${description}". Estimate the nutritional content. Return JSON: {"items":[{"name":"str","estimatedServingSize":"str","servingWeightG":num,"servingUnit":"g","servingUnitAmount":num,"isSupplement":false,"nutrients":{"calories":num,"protein":num,"carbs":num,"fat":num,"saturatedFat":num_or_null,"transFat":num_or_null,"polyunsaturatedFat":num_or_null,"monounsaturatedFat":num_or_null,"fiber":num_or_null,"sugar":num_or_null,"sodium":num_or_null,"cholesterol":num_or_null,"potassium":num_or_null,"calcium":num_or_null,"iron":num_or_null,"vitaminA":num_or_null,"vitaminC":num_or_null,"vitaminD":num_or_null},"confidence":"medium"}]}. Identify each item separately. Be realistic with portions and values.`
+
+  return runWithFallback(TEXT_CHAIN, keys, (provider) => {
+    if (provider === 'gemini') {
+      return { prompt }
+    }
+    return {
+      messages: [{ role: 'user', content: prompt }],
+    }
+  })
+}
+
 export async function estimateExerciseCalories(keys, exercise, durationMin, weightKg) {
   const prompt = `Estimate calories burned. Return JSON: {"exercise":"${exercise}","durationMin":${durationMin},"caloriesBurned":number,"intensity":"low|moderate|high"}. Person: ${weightKg}kg, ${durationMin} min of ${exercise}. Be realistic.`
 

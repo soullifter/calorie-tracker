@@ -3,7 +3,7 @@ import { ACTIVITY_LEVELS } from '../utils/constants'
 import { calculateBMR, calculateTDEE, calculateDailyTargets, calculateDeficit, getDateKey } from '../utils/calculations'
 import { saveProfile, getWeightLog, addWeightEntry } from '../utils/storage'
 
-export default function Settings({ profile, onUpdate, onClose }) {
+export default function Settings({ profile, onUpdate, onClose, onOpenCatalog }) {
   const [form, setForm] = useState({ ...profile })
   const [weightInput, setWeightInput] = useState('')
   const [saved, setSaved] = useState(false)
@@ -157,6 +157,21 @@ export default function Settings({ profile, onUpdate, onClose }) {
         >
           {saved ? 'Saved!' : 'Save Changes'}
         </button>
+
+        {/* Catalogs */}
+        <div className="bg-gray-900 rounded-xl p-4 space-y-3">
+          <h3 className="text-white font-medium">Catalogs</h3>
+          <div className="flex gap-2">
+            <button
+              onClick={() => onOpenCatalog?.('food')}
+              className="flex-1 py-3 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition text-sm font-medium"
+            >Food Library</button>
+            <button
+              onClick={() => onOpenCatalog?.('exercise')}
+              className="flex-1 py-3 rounded-lg bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 transition text-sm font-medium"
+            >Exercise Library</button>
+          </div>
+        </div>
 
         {/* Data Transfer */}
         <div className="bg-gray-900 rounded-xl p-4 space-y-3">

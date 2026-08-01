@@ -7,6 +7,7 @@ import Home from './components/Home'
 import Dashboard from './components/Dashboard'
 import ExercisePage from './components/ExercisePage'
 import Settings from './components/Settings'
+import { FoodCatalog, ExerciseCatalog } from './components/Catalog'
 import BottomNav from './components/BottomNav'
 
 // Migrate old profiles that are missing new fields
@@ -52,7 +53,8 @@ function migrateProfile(p) {
 function App() {
   const [profile, setProfile] = useState(null)
   const [tab, setTab] = useState('home') // home | today | settings
-  const [selectedDate, setSelectedDate] = useState(null) // date key for day view from calendar
+  const [selectedDate, setSelectedDate] = useState(null)
+  const [catalog, setCatalog] = useState(null) // 'food' | 'exercise' | null
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
@@ -80,6 +82,10 @@ function App() {
       />
     )
   }
+
+  // Catalog views
+  if (catalog === 'food') return <FoodCatalog onClose={() => setCatalog(null)} />
+  if (catalog === 'exercise') return <ExerciseCatalog onClose={() => setCatalog(null)} />
 
   // Day view from calendar selection
   if (selectedDate) {
@@ -116,6 +122,7 @@ function App() {
           profile={profile}
           onUpdate={(p) => setProfile(p)}
           onClose={() => setTab('home')}
+          onOpenCatalog={setCatalog}
         />
       )}
       <BottomNav active={tab} onChange={setTab} />
