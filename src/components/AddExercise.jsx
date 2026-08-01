@@ -125,6 +125,9 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
   // Describe flow state
   const [describeText, setDescribeText] = useState('')
 
+  // History flow state
+  const [historySearch, setHistorySearch] = useState('')
+
   const fileRef = useRef(null)
 
   const compressImage = (file, maxDim = 768, quality = 0.6) => {
@@ -443,7 +446,6 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
   // Exercise history mode
   if (step === 'history') {
     const library = getExerciseLibrary().sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0))
-    const [historySearch, setHistorySearch] = useState('')
     const filtered = library.filter((e) =>
       e.name.toLowerCase().includes(historySearch.toLowerCase())
     )
