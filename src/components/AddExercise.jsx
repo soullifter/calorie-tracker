@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { identifyExercise, calculateExerciseCalories, estimateExerciseCalories, describeExercise } from '../utils/ai'
+import { getExerciseLibrary, saveExerciseToLibrary } from '../utils/storage'
 
 const QUICK_EXERCISES = [
   'Walking', 'Running', 'Cycling', 'Swimming', 'Jump Rope',
@@ -238,19 +239,31 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
         params,
       }, weightKg, heightCm)
 
-      onAdd({
+      const entry = {
         id: `ex_${Date.now()}`,
         exercise: selectedExercise.name,
         equipment: equipment?.equipment,
         type: selectedGroup?.group?.toLowerCase() || 'strength',
         muscleGroups: [selectedGroup?.group].filter(Boolean),
         params,
+        fields: selectedExercise.fields,
         summary: result.summary || '',
         durationMin: params.duration || (params.sets ? Math.round((params.sets || 1) * (params.reps || 10) * 0.1) : 0),
         caloriesBurned: result.caloriesBurned || 0,
         intensity: result.intensity || 'moderate',
         loggedAt: Date.now(),
+      }
+      // Save to exercise library for reuse
+      saveExerciseToLibrary({
+        id: `exlib_${selectedExercise.name.replace(/\s+/g, '_').toLowerCase()}`,
+        name: selectedExercise.name,
+        equipment: equipment?.equipment,
+        type: entry.type,
+        muscleGroups: entry.muscleGroups,
+        fields: selectedExercise.fields,
+        defaultParams: params,
       })
+      onAdd(entry)
     } catch (err) {
       setError(err.message || 'Failed to calculate calories')
     } finally {
@@ -427,6 +440,56 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
     )
   }
 
+  // Exercise history mode
+  if (step === 'history') {
+    const library = getExerciseLibrary().sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0))
+    const [historySearch, setHistorySearch] = useState('')
+    const filtered = library.filter((e) =>
+      e.name.toLowerCase().includes(historySearch.toLowerCase())
+    )
+
+    return (
+      <div className="space-y-3">
+        <BackButton />
+        <input type="text" placeholder="Search exercises..." value={historySearch}
+          onChange={(e) => setHistorySearch(e.target.value)}
+          className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-700 focus:border-emerald-500 focus:outline-none" />
+        {filtered.length === 0 ? (
+          <p className="text-gray-600 text-sm text-center py-4">
+            {library.length === 0 ? 'No saved exercises yet.' : 'No matches.'}
+          </p>
+        ) : (
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {filtered.map((ex) => (
+              <button key={ex.id} onClick={() => {
+                setEquipment({ equipment: ex.equipment || ex.name })
+                setSelectedGroup({ group: ex.muscleGroups?.[0] || 'General', exercises: [{ name: ex.name, fields: ex.fields || [] }] })
+                const defaults = {}
+                ;(ex.fields || []).forEach((f) => {
+                  const defVal = ex.defaultParams?.[f.key]
+                  if (defVal != null) defaults[f.key] = defVal
+                  else if (f.default != null) defaults[f.key] = f.default
+                  else if (f.type === 'select' && f.options?.length) defaults[f.key] = f.options[0]
+                })
+                setSelectedExercise({ name: ex.name, fields: ex.fields || [] })
+                setFieldValues(defaults)
+                setStep('fill-fields')
+              }}
+                className="w-full p-3 rounded-xl bg-gray-800 border border-gray-700 hover:border-emerald-500/50 text-left transition"
+              >
+                <p className="text-white text-sm font-medium">{ex.name}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  {ex.type && <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">{ex.type}</span>}
+                  {ex.equipment && <span className="text-[10px] text-gray-500">{ex.equipment}</span>}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   // Describe exercise mode
   if (step === 'describe') {
     return (
@@ -525,6 +588,14 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
           >
             <p className="text-white font-medium">Snap Equipment Photo</p>
             <p className="text-xs text-gray-400 mt-1">AI identifies the machine and suggests exercises</p>
+          </button>
+
+          <button
+            onClick={() => setStep('history')}
+            className="p-4 rounded-lg bg-gray-800 border border-gray-700 hover:border-amber-500 text-left transition"
+          >
+            <p className="text-white font-medium">Pick from History</p>
+            <p className="text-xs text-gray-400 mt-1">Re-do a previously logged exercise</p>
           </button>
 
           <button

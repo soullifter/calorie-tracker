@@ -49,7 +49,25 @@ export default function Dashboard({ profile, onOpenSettings, initialDate, onBack
   const [dayLog, setDayLog] = useState(getDayLog(initialDate || getDateKey()))
   const [addingMeal, setAddingMeal] = useState(null)
   const [showNutrients, setShowNutrients] = useState(false)
-  const [expandedEntry, setExpandedEntry] = useState(null) // logId of expanded food item
+  const [expandedEntry, setExpandedEntry] = useState(null)
+  const [editingEntry, setEditingEntry] = useState(null) // { meal, logId, servings }
+
+  const handleEditFood = (meal, logId, newServings) => {
+    const updated = { ...dayLog, meals: { ...dayLog.meals } }
+    updated.meals[meal] = updated.meals[meal].map((e) => {
+      if (e.logId !== logId) return e
+      // Recalculate nutrients based on new servings vs old
+      const ratio = newServings / (e.servings || 1)
+      const newNutrients = {}
+      for (const [key, val] of Object.entries(e.nutrients)) {
+        newNutrients[key] = val != null ? Math.round(val * ratio * 10) / 10 : null
+      }
+      return { ...e, servings: newServings, nutrients: newNutrients }
+    })
+    saveDayLog(dateKey, updated)
+    setDayLog(updated)
+    setEditingEntry(null)
+  }
 
   useEffect(() => {
     setDayLog(getDayLog(dateKey))
@@ -257,14 +275,50 @@ export default function Dashboard({ profile, onOpenSettings, initialDate, onBack
                                 </div>
                               ))}
                             </div>
-                            {/* Delete button */}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleRemoveFood(meal, entry.logId); setExpandedEntry(null) }}
-                              className="w-full py-2 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition flex items-center justify-center gap-1.5 mt-1"
-                            >
-                              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4h8v2m-7 5v6m4-6v6M5 6l1 14h12l1-14"/></svg>
-                              Remove
-                            </button>
+                            {/* Edit servings */}
+                            {editingEntry?.logId === entry.logId ? (
+                              <div className="flex items-center gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                                <span className="text-xs text-gray-400">Servings:</span>
+                                <input
+                                  type="text" inputMode="decimal"
+                                  defaultValue={entry.servings}
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      const v = parseFloat(e.target.value)
+                                      if (v > 0) handleEditFood(meal, entry.logId, v)
+                                    }
+                                  }}
+                                  className="w-16 text-center p-1.5 rounded-lg bg-gray-800 text-white border border-gray-700 text-xs focus:outline-none focus:border-blue-500"
+                                />
+                                <button
+                                  onClick={(e2) => {
+                                    const input = e2.target.closest('div').querySelector('input')
+                                    const v = parseFloat(input.value)
+                                    if (v > 0) handleEditFood(meal, entry.logId, v)
+                                  }}
+                                  className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs"
+                                >Save</button>
+                                <button onClick={() => setEditingEntry(null)} className="text-xs text-gray-500">Cancel</button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-2 mt-2">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setEditingEntry({ meal, logId: entry.logId }) }}
+                                  className="flex-1 py-2 rounded-lg text-xs text-blue-400 hover:bg-blue-500/10 transition flex items-center justify-center gap-1.5"
+                                >
+                                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleRemoveFood(meal, entry.logId); setExpandedEntry(null) }}
+                                  className="flex-1 py-2 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition flex items-center justify-center gap-1.5"
+                                >
+                                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4h8v2m-7 5v6m4-6v6M5 6l1 14h12l1-14"/></svg>
+                                  Remove
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}

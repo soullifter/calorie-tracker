@@ -1,6 +1,7 @@
 const KEYS = {
   profile: 'ct_profile',
   foodLibrary: 'ct_food_library',
+  exerciseLibrary: 'ct_exercise_library',
   dailyLogs: 'ct_daily_logs',
   weightLog: 'ct_weight_log',
 }
@@ -43,6 +44,35 @@ export function saveFoodToLibrary(food) {
 export function removeFoodFromLibrary(foodId) {
   const lib = getFoodLibrary().filter((f) => f.id !== foodId)
   set(KEYS.foodLibrary, lib)
+}
+
+// Exercise Library
+export function getExerciseLibrary() {
+  return get(KEYS.exerciseLibrary) || []
+}
+export function saveExerciseToLibrary(exercise) {
+  const lib = getExerciseLibrary()
+  const existing = lib.findIndex((e) => e.id === exercise.id)
+  if (existing >= 0) {
+    lib[existing] = { ...lib[existing], ...exercise, lastUsed: Date.now() }
+  } else {
+    lib.push({ ...exercise, lastUsed: Date.now() })
+  }
+  set(KEYS.exerciseLibrary, lib)
+}
+export function removeExerciseFromLibrary(exerciseId) {
+  const lib = getExerciseLibrary().filter((e) => e.id !== exerciseId)
+  set(KEYS.exerciseLibrary, lib)
+}
+export function updateFoodInLibrary(foodId, updates) {
+  const lib = getFoodLibrary()
+  const idx = lib.findIndex((f) => f.id === foodId)
+  if (idx >= 0) { lib[idx] = { ...lib[idx], ...updates }; set(KEYS.foodLibrary, lib) }
+}
+export function updateExerciseInLibrary(exerciseId, updates) {
+  const lib = getExerciseLibrary()
+  const idx = lib.findIndex((e) => e.id === exerciseId)
+  if (idx >= 0) { lib[idx] = { ...lib[idx], ...updates }; set(KEYS.exerciseLibrary, lib) }
 }
 
 // Daily Logs
