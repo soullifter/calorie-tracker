@@ -35,8 +35,18 @@ export const NUTRIENTS = [
   { key: 'calcium', label: 'Calcium', unit: 'mg' },
   { key: 'iron', label: 'Iron', unit: 'mg' },
   { key: 'vitaminA', label: 'Vitamin A', unit: 'mcg' },
+  { key: 'vitaminB6', label: 'Vitamin B6', unit: 'mg' },
+  { key: 'vitaminB12', label: 'Vitamin B12', unit: 'mcg' },
   { key: 'vitaminC', label: 'Vitamin C', unit: 'mg' },
   { key: 'vitaminD', label: 'Vitamin D', unit: 'mcg' },
+  { key: 'vitaminE', label: 'Vitamin E', unit: 'mg' },
+  { key: 'zinc', label: 'Zinc', unit: 'mg' },
+  { key: 'magnesium', label: 'Magnesium', unit: 'mg' },
+  { key: 'omega3', label: 'Omega-3', unit: 'mg' },
+  { key: 'biotin', label: 'Biotin', unit: 'mcg' },
+  { key: 'folate', label: 'Folate', unit: 'mcg' },
+  { key: 'creatine', label: 'Creatine', unit: 'g' },
+  { key: 'caffeine', label: 'Caffeine', unit: 'mg' },
 ]
 
 // Gender-aware RDA values (sources: FDA, NIH, AHA)
@@ -68,5 +78,13 @@ export function getDailyRDA(gender, dailyCalories) {
     vitaminA: isMale ? 900 : 700,   // NIH (mcg RAE)
     vitaminC: isMale ? 90 : 75,     // NIH
     vitaminD: 15,                    // NIH (600 IU = 15mcg, same for both)
+    vitaminE: 15,                    // NIH
+    vitaminB6: isMale ? 1.3 : 1.3,  // NIH (19-50)
+    vitaminB12: 2.4,                 // NIH
+    zinc: isMale ? 11 : 8,          // NIH
+    magnesium: isMale ? 420 : 320,  // NIH
+    omega3: 1600,                    // NIH (ALA, mg)
+    biotin: 30,                      // NIH (mcg)
+    folate: 400,                     // NIH (mcg DFE)
   }
 }

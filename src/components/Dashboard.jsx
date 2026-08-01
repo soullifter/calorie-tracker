@@ -221,7 +221,12 @@ export default function Dashboard({ profile, onOpenSettings, initialDate, onBack
                         onClick={() => setExpandedEntry(isExpanded ? null : entry.logId)}
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm text-gray-200 truncate">{entry.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm text-gray-200 truncate">{entry.name}</p>
+                            {entry.isSupplement && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-400 shrink-0">supp</span>
+                            )}
+                          </div>
                           <p className="text-xs text-gray-500 mt-0.5">
                             {entry.servings !== 1 ? `${entry.servings} servings` : '1 serving'}
                             {n.protein != null && ` \u00B7 P:${Math.round(n.protein)}g`}

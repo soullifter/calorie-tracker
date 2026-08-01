@@ -354,6 +354,8 @@ export default function AddFood({ mealType, keys, onAdd, onClose }) {
           servingUnitAmount: result.servingUnitAmount || 1,
           nutrients: result.nutrients,
           source: 'label',
+          isSupplement: result.isSupplement || false,
+          supplementType: result.supplementType || null,
         }
         saveFoodToLibrary(food)
         setScannedFood(food)
@@ -371,6 +373,8 @@ export default function AddFood({ mealType, keys, onAdd, onClose }) {
           nutrients: item.nutrients,
           confidence: item.confidence,
           source: 'photo',
+          isSupplement: item.isSupplement || false,
+          supplementType: item.supplementType || null,
         }))
         // Save each item to library
         items.forEach((item) => saveFoodToLibrary(item))
