@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getDateKey, sumNutrients } from '../utils/calculations'
-import { getDayLog, saveDayLog } from '../utils/storage'
+import { getDayLog, saveDayLog, getWeightLog } from '../utils/storage'
 import { MEAL_TYPES } from '../utils/constants'
 import AddExercise from './AddExercise'
 
@@ -142,9 +142,17 @@ export default function ExercisePage({ profile }) {
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-200">{ex.exercise}</p>
-                    {ex.summary && (
+                    {ex.sets && ex.sets.length > 0 ? (
+                      <div className="flex flex-wrap gap-1 mt-0.5">
+                        {ex.sets.map((s, si) => (
+                          <span key={si} className="text-[10px] px-1.5 py-0.5 rounded bg-surface-3 text-gray-400">
+                            {s.reps}x{s.weight}kg
+                          </span>
+                        ))}
+                      </div>
+                    ) : ex.summary ? (
                       <p className="text-xs text-gray-400 mt-0.5">{ex.summary}</p>
-                    )}
+                    ) : null}
                     <div className="flex flex-wrap items-center gap-2 mt-1.5">
                       {ex.type && (
                         <span className={`text-[10px] px-2 py-0.5 rounded-full ${
@@ -225,7 +233,7 @@ export default function ExercisePage({ profile }) {
               <div className="mt-3 animate-scale-in">
                 <AddExercise
                   keys={{ geminiKey: profile.geminiApiKey, groqKey: profile.groqApiKey }}
-                  weightKg={profile.weightKg}
+                  weightKg={(() => { const wl = getWeightLog(); return wl.length > 0 ? wl[wl.length - 1].weight : profile.weightKg })()}
                   heightCm={profile.heightCm}
                   onAdd={handleAdd}
                   onClose={() => setAdding(false)}

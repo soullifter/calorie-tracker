@@ -122,6 +122,9 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
   const [quickDuration, setQuickDuration] = useState('30')
   const [quickSteps, setQuickSteps] = useState('')
 
+  // Multi-set state
+  const [multiSets, setMultiSets] = useState([]) // [{weight, reps}, ...]
+
   // Describe flow state
   const [describeText, setDescribeText] = useState('')
 
@@ -157,6 +160,7 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
     setSelectedGroup(null)
     setSelectedExercise(null)
     setFieldValues({})
+    setMultiSets([])
     setError('')
     if (fileRef.current) fileRef.current.value = ''
   }
@@ -218,23 +222,58 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
   }
 
   const handleCalculate = async () => {
-    const missingField = (selectedExercise.fields || []).find((f) => {
-      const val = fieldValues[f.key]
-      return val === undefined || val === ''
-    })
-    if (missingField) {
-      setError(`Please fill in: ${missingField.label}`)
-      return
+    const isStrength = (selectedExercise.fields || []).some((f) => f.key === 'weight' || f.key === 'sets' || f.key === 'reps')
+
+    // For strength with multi-sets, validate we have at least one set OR field values
+    if (isStrength && multiSets.length === 0) {
+      // Validate current fields as a single set
+      const w = fieldValues.weight
+      const r = fieldValues.reps
+      if (!w || !r) {
+        setError('Enter weight and reps, or add sets first')
+        return
+      }
+      // Auto-add as single set
+      multiSets.push({ weight: w, reps: r })
+    }
+
+    // For non-strength, validate required fields
+    if (!isStrength) {
+      const missingField = (selectedExercise.fields || []).find((f) => {
+        const val = fieldValues[f.key]
+        return val === undefined || val === ''
+      })
+      if (missingField) {
+        setError(`Please fill in: ${missingField.label}`)
+        return
+      }
     }
 
     setLoading(true)
     setError('')
     try {
-      const params = {}
-      ;(selectedExercise.fields || []).forEach((f) => {
-        const val = fieldValues[f.key]
-        params[f.key] = f.type === 'number' ? parseFloat(val) || 0 : val
-      })
+      let params = {}
+      let summary = ''
+
+      if (isStrength && multiSets.length > 0) {
+        // Build params from multi-sets
+        const totalSets = multiSets.length
+        const totalReps = multiSets.reduce((s, set) => s + (parseInt(set.reps) || 0), 0)
+        const avgWeight = multiSets.reduce((s, set) => s + (parseFloat(set.weight) || 0), 0) / totalSets
+        const maxWeight = Math.max(...multiSets.map((set) => parseFloat(set.weight) || 0))
+        params = {
+          sets: totalSets,
+          reps: Math.round(totalReps / totalSets),
+          weight: Math.round(avgWeight * 10) / 10,
+          totalVolume: multiSets.reduce((s, set) => s + (parseFloat(set.weight) || 0) * (parseInt(set.reps) || 0), 0),
+        }
+        summary = multiSets.map((set, i) => `${set.reps}x${set.weight}kg`).join(', ')
+      } else {
+        ;(selectedExercise.fields || []).forEach((f) => {
+          const val = fieldValues[f.key]
+          params[f.key] = f.type === 'number' ? parseFloat(val) || 0 : val
+        })
+      }
 
       const result = await calculateExerciseCalories(keys, {
         name: selectedExercise.name,
@@ -249,8 +288,9 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
         type: selectedGroup?.group?.toLowerCase() || 'strength',
         muscleGroups: [selectedGroup?.group].filter(Boolean),
         params,
+        sets: multiSets.length > 0 ? [...multiSets] : null,
         fields: selectedExercise.fields,
-        summary: result.summary || '',
+        summary: summary || result.summary || '',
         durationMin: params.duration || (params.sets ? Math.round((params.sets || 1) * (params.reps || 10) * 0.1) : 0),
         caloriesBurned: result.caloriesBurned || 0,
         intensity: result.intensity || 'moderate',
@@ -414,6 +454,8 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
 
   // Step: Fill fields
   if (step === 'fill-fields' && selectedExercise) {
+    const isStrength = (selectedExercise.fields || []).some((f) => f.key === 'weight' || f.key === 'sets' || f.key === 'reps')
+
     return (
       <div className="space-y-4">
         <BackButton to={selectedGroup?.exercises?.length > 1 ? 'pick-exercise' : 'pick-group'} />
@@ -423,8 +465,23 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
           <p className="text-xs text-gray-500 mt-0.5">{selectedGroup?.group}</p>
         </div>
 
+        {/* Multi-set mode for strength exercises */}
+        {isStrength && multiSets.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs text-gray-400 uppercase tracking-wider">Sets logged</p>
+            {multiSets.map((s, i) => (
+              <div key={i} className="flex items-center justify-between bg-surface-3 rounded-lg px-3 py-2">
+                <span className="text-xs text-gray-300">Set {i + 1}: {s.reps} reps @ {s.weight}kg</span>
+                <button onClick={() => setMultiSets(multiSets.filter((_, j) => j !== i))}
+                  className="text-gray-600 hover:text-red-400 text-xs">&times;</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Non-strength fields (duration, speed, etc.) */}
         <DynamicFields
-          fields={selectedExercise.fields || []}
+          fields={(selectedExercise.fields || []).filter((f) => !isStrength || (f.key !== 'sets'))}
           values={fieldValues}
           onChange={updateField}
           weightDisplayValues={weightDisplayValues}
@@ -432,13 +489,29 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
 
         {error && <p className="text-red-400 text-sm">{error}</p>}
 
-        <button
-          onClick={handleCalculate}
-          disabled={loading}
-          className="w-full py-3 rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-500 transition disabled:opacity-50"
-        >
-          {loading ? 'Calculating...' : 'Calculate & Log'}
-        </button>
+        <div className="flex gap-2">
+          {isStrength && (
+            <button
+              onClick={() => {
+                const w = fieldValues.weight
+                const r = fieldValues.reps
+                if (!w || !r) { setError('Enter weight and reps first'); return }
+                setMultiSets([...multiSets, { weight: w, reps: r }])
+                setError('')
+              }}
+              className="flex-1 py-3 rounded-xl bg-surface-3 text-gray-300 font-medium hover:bg-surface-3/80 transition text-sm"
+            >
+              + Add Set
+            </button>
+          )}
+          <button
+            onClick={handleCalculate}
+            disabled={loading}
+            className="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-500 transition disabled:opacity-50"
+          >
+            {loading ? 'Calculating...' : 'Calculate & Log'}
+          </button>
+        </div>
       </div>
     )
   }
@@ -465,16 +538,30 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
             {filtered.map((ex) => (
               <button key={ex.id} onClick={() => {
                 setEquipment({ equipment: ex.equipment || ex.name })
-                setSelectedGroup({ group: ex.muscleGroups?.[0] || 'General', exercises: [{ name: ex.name, fields: ex.fields || [] }] })
+                // Generate default fields if missing
+                let fields = ex.fields && ex.fields.length > 0 ? ex.fields : null
+                if (!fields) {
+                  if (ex.type === 'cardio') {
+                    fields = [{ key: 'duration', label: 'Duration', type: 'number', unit: 'min' }]
+                  } else {
+                    fields = [
+                      { key: 'weight', label: 'Weight', type: 'number', unit: 'kg' },
+                      { key: 'sets', label: 'Sets', type: 'number' },
+                      { key: 'reps', label: 'Reps per set', type: 'number' },
+                    ]
+                  }
+                }
+                setSelectedGroup({ group: ex.muscleGroups?.[0] || 'General', exercises: [{ name: ex.name, fields }] })
                 const defaults = {}
-                ;(ex.fields || []).forEach((f) => {
+                fields.forEach((f) => {
                   const defVal = ex.defaultParams?.[f.key]
-                  if (defVal != null) defaults[f.key] = defVal
-                  else if (f.default != null) defaults[f.key] = f.default
+                  if (defVal != null) defaults[f.key] = String(defVal)
+                  else if (f.default != null) defaults[f.key] = String(f.default)
                   else if (f.type === 'select' && f.options?.length) defaults[f.key] = f.options[0]
                 })
-                setSelectedExercise({ name: ex.name, fields: ex.fields || [] })
+                setSelectedExercise({ name: ex.name, fields })
                 setFieldValues(defaults)
+                setMultiSets([])
                 setStep('fill-fields')
               }}
                 className="w-full p-3 rounded-xl bg-gray-800 border border-gray-700 hover:border-emerald-500/50 text-left transition"
