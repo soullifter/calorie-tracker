@@ -48,6 +48,28 @@ function normalizeGroup(mg) {
   return MUSCLE_GROUPS.find((g) => mg.toLowerCase().includes(g.toLowerCase())) || mg
 }
 
+// Derive session stats from raw per-set data when available, falling back to
+// the (averaged) params for legacy entries logged before multi-set support.
+function sessionStats(ex) {
+  if (ex.sets && ex.sets.length > 0) {
+    const weights = ex.sets.map((s) => parseFloat(s.weight) || 0)
+    const reps = ex.sets.map((s) => parseInt(s.reps) || 0)
+    const volume = ex.sets.reduce((sum, s) => sum + (parseFloat(s.weight) || 0) * (parseInt(s.reps) || 0), 0)
+    return {
+      weight: Math.max(...weights),
+      sets: ex.sets.length,
+      reps: reps.reduce((a, b) => a + b, 0),
+      volume,
+    }
+  }
+  return {
+    weight: parseFloat(ex.params?.weight) || 0,
+    sets: parseInt(ex.params?.sets) || 0,
+    reps: parseInt(ex.params?.reps) || 0,
+    volume: (parseFloat(ex.params?.weight) || 0) * (parseInt(ex.params?.sets) || 1) * (parseInt(ex.params?.reps) || 1),
+  }
+}
+
 // Weekly exercise frequency + calories burned chart
 export function WeeklyExerciseChart() {
   const days = useMemo(getLast7DaysData, [])
@@ -132,13 +154,11 @@ function MuscleGroupDetail({ group, onBack }) {
     const groups = (ex.muscleGroups || []).map(normalizeGroup)
     if (!groups.includes(group)) return
     if (!exerciseHistory[ex.exercise]) exerciseHistory[ex.exercise] = []
+    const stats = sessionStats(ex)
     exerciseHistory[ex.exercise].push({
       date: ex.dateKey,
       dateLabel: new Date(ex.dateKey + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      weight: parseFloat(ex.params?.weight) || 0,
-      sets: parseInt(ex.params?.sets) || 0,
-      reps: parseInt(ex.params?.reps) || 0,
-      volume: (parseFloat(ex.params?.weight) || 0) * (parseInt(ex.params?.sets) || 1) * (parseInt(ex.params?.reps) || 1),
+      ...stats,
       caloriesBurned: ex.caloriesBurned || 0,
       summary: ex.summary || '',
     })
@@ -354,14 +374,12 @@ export function ProgressiveOverload() {
 
   const exerciseHistory = {}
   allExercises.forEach((ex) => {
-    if (!ex.params?.weight) return
+    const hasSets = ex.sets && ex.sets.length > 0
+    if (!hasSets && !ex.params?.weight) return
     if (!exerciseHistory[ex.exercise]) exerciseHistory[ex.exercise] = []
     exerciseHistory[ex.exercise].push({
       date: ex.dateKey,
-      weight: parseFloat(ex.params.weight) || 0,
-      sets: parseInt(ex.params.sets) || 0,
-      reps: parseInt(ex.params.reps) || 0,
-      volume: (parseFloat(ex.params.weight) || 0) * (parseInt(ex.params.sets) || 1) * (parseInt(ex.params.reps) || 1),
+      ...sessionStats(ex),
     })
   })
 
