@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getProfile, saveProfile, migrateExercisesToLibrary } from './utils/storage'
-import { calculateBMR, calculateTDEE, calculateDailyTargets, calculateDeficit, getDateKey } from './utils/calculations'
-import { ACTIVITY_LEVELS } from './utils/constants'
+import { calculateBMR, calculateDailyTargets, calculateDeficit, getDateKey } from './utils/calculations'
 import Onboarding from './components/Onboarding'
 import Home from './components/Home'
 import Dashboard from './components/Dashboard'
@@ -29,20 +28,25 @@ function migrateProfile(p) {
     const weight = parseFloat(p.weightKg)
     const height = parseFloat(p.heightCm)
     const age = parseInt(p.age)
-    const activity = ACTIVITY_LEVELS.find((l) => l.id === p.activityLevel) || ACTIVITY_LEVELS[0]
     const targetWeight = parseFloat(p.targetWeightKg)
 
     const bmr = calculateBMR(p.gender, weight, height, age)
-    const tdee = calculateTDEE(bmr, activity.factor)
     const deficit = weight > targetWeight
       ? (p.targetDate ? calculateDeficit(weight, targetWeight, p.targetDate) : 500)
       : 0
-    const targets = calculateDailyTargets(tdee, deficit, weight)
+    const targets = calculateDailyTargets(bmr, deficit, weight)
 
     p.bmr = Math.round(bmr)
-    p.tdee = tdee
     p.deficit = deficit
     p.targets = targets
+    changed = true
+  }
+
+  // Drop activity-level based TDEE in favor of BMR-only baseline + logged exercise
+  if ('activityLevel' in p || p.tdee !== p.bmr) {
+    delete p.activityLevel
+    p.tdee = p.bmr
+    p.targets = calculateDailyTargets(p.bmr, p.deficit, parseFloat(p.weightKg))
     changed = true
   }
 

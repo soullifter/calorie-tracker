@@ -1,10 +1,3 @@
-export const ACTIVITY_LEVELS = [
-  { id: 'sedentary', label: 'Sedentary', desc: 'Little or no exercise', factor: 1.2 },
-  { id: 'light', label: 'Lightly Active', desc: 'Light exercise 1-3 days/week', factor: 1.375 },
-  { id: 'moderate', label: 'Moderately Active', desc: 'Moderate exercise 3-5 days/week', factor: 1.55 },
-  { id: 'active', label: 'Very Active', desc: 'Hard exercise 6-7 days/week', factor: 1.725 },
-]
-
 export const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snacks']
 
 export const MEAL_LABELS = {

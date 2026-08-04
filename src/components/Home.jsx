@@ -133,13 +133,14 @@ export default function Home({ profile, onSelectDay, onGoToday }) {
                 }
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                {Math.max(0, profile.targets.calories - Math.round(todayData.totals.calories || 0))} cal remaining
-                {todayData.burned > 0 && ` \u00B7 ${todayData.burned} burned`}
+                {Math.max(0, profile.targets.calories + todayData.burned - Math.round(todayData.totals.calories || 0))} cal remaining
+                {todayData.burned > 0 && ` (+${todayData.burned} burned)`}
               </p>
             </div>
             <CalorieRing
               consumed={todayData.totals.calories || 0}
               target={profile.targets.calories}
+              burned={todayData.burned}
             />
           </div>
           <div className="flex items-center justify-end mt-2">

@@ -153,10 +153,10 @@ export default function Dashboard({ profile, onOpenSettings, initialDate, onBack
       <div className="max-w-lg mx-auto px-4 space-y-5 mt-6">
         {/* Calorie Ring Section */}
         <div className="text-center animate-fade-in">
-          <CalorieRing consumed={totals.calories || 0} target={profile.targets.calories} />
+          <CalorieRing consumed={totals.calories || 0} target={profile.targets.calories} burned={totalBurned} />
           <div className="flex justify-center gap-5 mt-4">
             {[
-              { label: 'Target', value: profile.targets.calories, color: 'text-gray-400' },
+              { label: 'Target', value: profile.targets.calories + totalBurned, color: 'text-gray-400' },
               { label: 'Eaten', value: Math.round(totals.calories || 0), color: 'text-white' },
               ...(totalBurned > 0 ? [{ label: 'Burned', value: totalBurned, color: 'text-emerald-400' }] : []),
             ].map((item) => (

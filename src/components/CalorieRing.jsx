@@ -1,7 +1,8 @@
-export default function CalorieRing({ consumed, target }) {
-  const remaining = Math.max(0, target - consumed)
-  const pct = Math.min(1, consumed / target)
-  const over = consumed > target
+export default function CalorieRing({ consumed, target, burned = 0 }) {
+  const adjusted = target + burned
+  const remaining = Math.max(0, adjusted - consumed)
+  const pct = Math.min(1, consumed / adjusted)
+  const over = consumed > adjusted
 
   const size = 200
   const radius = 82

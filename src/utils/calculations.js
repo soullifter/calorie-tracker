@@ -8,10 +8,6 @@ export function calculateBMR(gender, weightKg, heightCm, age) {
   return 10 * weightKg + 6.25 * heightCm - 5 * age - 161
 }
 
-export function calculateTDEE(bmr, activityFactor) {
-  return Math.round(bmr * activityFactor)
-}
-
 // Calculate deficit from weight goal and timeline
 // 1 kg of fat = ~7700 calories
 export function calculateDeficit(currentKg, targetKg, targetDate) {

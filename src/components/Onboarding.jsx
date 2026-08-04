@@ -1,6 +1,5 @@
 import { useState, useRef } from 'react'
-import { ACTIVITY_LEVELS } from '../utils/constants'
-import { calculateBMR, calculateTDEE, calculateDailyTargets, calculateDeficit, getWeeklyLossRate } from '../utils/calculations'
+import { calculateBMR, calculateDailyTargets, calculateDeficit, getWeeklyLossRate } from '../utils/calculations'
 import { saveProfile } from '../utils/storage'
 
 const STEP_TITLES = ['About You', 'Your Goals', 'AI Setup']
@@ -20,7 +19,6 @@ export default function Onboarding({ onComplete }) {
     weightKg: '',
     targetWeightKg: '',
     targetDate: '',
-    activityLevel: 'sedentary',
     geminiApiKey: '',
     groqApiKey: '',
   })
@@ -95,23 +93,6 @@ export default function Onboarding({ onComplete }) {
           </div>
         )
       })()}
-      <div className="space-y-2">
-        <p className="text-xs text-gray-500 uppercase tracking-wider">Activity Level</p>
-        {ACTIVITY_LEVELS.map((level) => (
-          <button
-            key={level.id}
-            onClick={() => update('activityLevel', level.id)}
-            className={`w-full p-3.5 rounded-xl text-left border transition ${
-              form.activityLevel === level.id
-                ? 'border-brand-400 bg-brand-500/10 text-white shadow-[0_0_20px_-5px] shadow-brand-500/20'
-                : 'border-white/5 bg-surface-3 text-gray-400 hover:border-white/10'
-            }`}
-          >
-            <span className="font-medium text-sm">{level.label}</span>
-            <span className="text-xs text-gray-500 ml-2">{level.desc}</span>
-          </button>
-        ))}
-      </div>
     </div>,
 
     // Step 2: API Keys
@@ -169,15 +150,13 @@ export default function Onboarding({ onComplete }) {
     const weight = parseFloat(form.weightKg)
     const height = parseFloat(form.heightCm)
     const age = parseInt(form.age)
-    const activity = ACTIVITY_LEVELS.find((l) => l.id === form.activityLevel)
 
     const targetWeight = parseFloat(form.targetWeightKg)
     const bmr = calculateBMR(form.gender, weight, height, age)
-    const tdee = calculateTDEE(bmr, activity.factor)
     const deficit = weight > targetWeight
       ? (form.targetDate ? calculateDeficit(weight, targetWeight, form.targetDate) : 500)
       : 0
-    const targets = calculateDailyTargets(tdee, deficit, weight)
+    const targets = calculateDailyTargets(bmr, deficit, weight)
 
     const profile = {
       ...form,
@@ -186,7 +165,7 @@ export default function Onboarding({ onComplete }) {
       weightKg: weight,
       targetWeightKg: targetWeight,
       bmr: Math.round(bmr),
-      tdee,
+      tdee: Math.round(bmr),
       deficit,
       targets,
       createdAt: Date.now(),
