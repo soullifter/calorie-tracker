@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getProfile, saveProfile, migrateExercisesToLibrary } from './utils/storage'
-import { calculateBMR, calculateDailyTargets, calculateDeficit, getDateKey } from './utils/calculations'
+import { calculateBMR, calculateBaseline, calculateDailyTargets, calculateDeficit, getDateKey } from './utils/calculations'
 import Onboarding from './components/Onboarding'
 import Home from './components/Home'
 import Dashboard from './components/Dashboard'
@@ -34,7 +34,7 @@ function migrateProfile(p) {
     const deficit = weight > targetWeight
       ? (p.targetDate ? calculateDeficit(weight, targetWeight, p.targetDate) : 500)
       : 0
-    const targets = calculateDailyTargets(bmr, deficit, weight)
+    const targets = calculateDailyTargets(calculateBaseline(bmr), deficit, weight)
 
     p.bmr = Math.round(bmr)
     p.deficit = deficit
@@ -42,11 +42,12 @@ function migrateProfile(p) {
     changed = true
   }
 
-  // Drop activity-level based TDEE in favor of BMR-only baseline + logged exercise
-  if ('activityLevel' in p || p.tdee !== p.bmr) {
+  // Drop activity-level based TDEE in favor of BMR + flat NEAT buffer + logged exercise
+  const expectedTdee = calculateBaseline(p.bmr)
+  if ('activityLevel' in p || p.tdee !== expectedTdee) {
     delete p.activityLevel
-    p.tdee = p.bmr
-    p.targets = calculateDailyTargets(p.bmr, p.deficit, parseFloat(p.weightKg))
+    p.tdee = expectedTdee
+    p.targets = calculateDailyTargets(expectedTdee, p.deficit, parseFloat(p.weightKg))
     changed = true
   }
 

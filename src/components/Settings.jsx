@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { calculateBMR, calculateDailyTargets, calculateDeficit, getDateKey } from '../utils/calculations'
+import { calculateBMR, calculateBaseline, calculateDailyTargets, calculateDeficit, getDateKey } from '../utils/calculations'
 import { saveProfile, getWeightLog, addWeightEntry } from '../utils/storage'
 
 export default function Settings({ profile, onUpdate, onClose, onOpenCatalog }) {
@@ -20,9 +20,10 @@ export default function Settings({ profile, onUpdate, onClose, onOpenCatalog }) 
     const deficit = weight > targetWeight
       ? (form.targetDate ? calculateDeficit(weight, targetWeight, form.targetDate) : 500)
       : 0
-    const targets = calculateDailyTargets(bmr, deficit, weight)
+    const tdee = calculateBaseline(bmr)
+    const targets = calculateDailyTargets(tdee, deficit, weight)
 
-    const updated = { ...form, bmr: Math.round(bmr), tdee: Math.round(bmr), deficit, targets }
+    const updated = { ...form, bmr: Math.round(bmr), tdee, deficit, targets }
     saveProfile(updated)
     onUpdate(updated)
     setSaved(true)
@@ -79,9 +80,10 @@ export default function Settings({ profile, onUpdate, onClose, onOpenCatalog }) 
         {/* Daily Targets Display */}
         <div className="bg-gray-900 rounded-xl p-4 space-y-2">
           <h3 className="text-white font-medium">Your Daily Targets</h3>
-          <p className="text-xs text-gray-500">Based on BMR — logged exercise adds back to your budget for the day</p>
+          <p className="text-xs text-gray-500">BMR + daily movement buffer — logged exercise adds back to your budget for the day</p>
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div className="text-gray-400">BMR: <span className="text-white">{form.bmr} cal</span></div>
+            <div className="text-gray-400">Baseline: <span className="text-white">{form.tdee} cal</span></div>
             <div className="text-gray-400">Target: <span className="text-white">{form.targets?.calories} cal</span></div>
             <div className="text-gray-400">Protein: <span className="text-blue-400">{form.targets?.protein}g</span></div>
             <div className="text-gray-400">Carbs: <span className="text-yellow-400">{form.targets?.carbs}g</span></div>

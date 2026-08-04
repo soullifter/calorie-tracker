@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { calculateBMR, calculateDailyTargets, calculateDeficit, getWeeklyLossRate } from '../utils/calculations'
+import { calculateBMR, calculateBaseline, calculateDailyTargets, calculateDeficit, getWeeklyLossRate } from '../utils/calculations'
 import { saveProfile } from '../utils/storage'
 
 const STEP_TITLES = ['About You', 'Your Goals', 'AI Setup']
@@ -156,7 +156,8 @@ export default function Onboarding({ onComplete }) {
     const deficit = weight > targetWeight
       ? (form.targetDate ? calculateDeficit(weight, targetWeight, form.targetDate) : 500)
       : 0
-    const targets = calculateDailyTargets(bmr, deficit, weight)
+    const tdee = calculateBaseline(bmr)
+    const targets = calculateDailyTargets(tdee, deficit, weight)
 
     const profile = {
       ...form,
@@ -165,7 +166,7 @@ export default function Onboarding({ onComplete }) {
       weightKg: weight,
       targetWeightKg: targetWeight,
       bmr: Math.round(bmr),
-      tdee: Math.round(bmr),
+      tdee,
       deficit,
       targets,
       createdAt: Date.now(),

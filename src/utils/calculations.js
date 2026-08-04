@@ -8,6 +8,14 @@ export function calculateBMR(gender, weightKg, heightCm, age) {
   return 10 * weightKg + 6.25 * heightCm - 5 * age - 161
 }
 
+// Small flat buffer above BMR for baseline daily movement (NEAT) not captured
+// by logged exercise — no activity-level guessing, just a modest multiplier.
+export const NEAT_FACTOR = 1.2
+
+export function calculateBaseline(bmr) {
+  return Math.round(bmr * NEAT_FACTOR)
+}
+
 // Calculate deficit from weight goal and timeline
 // 1 kg of fat = ~7700 calories
 export function calculateDeficit(currentKg, targetKg, targetDate) {
