@@ -3,7 +3,7 @@ import { identifyExercise, calculateExerciseCalories, estimateExerciseCalories, 
 import { getExerciseLibrary, saveExerciseToLibrary, getExerciseHistory } from '../utils/storage'
 import { ExerciseDetail } from './ExerciseTrends'
 
-function LastWorkoutPreview({ exerciseName }) {
+function LastWorkoutPreview({ exerciseName, onViewHistory }) {
   const history = getExerciseHistory(exerciseName)
   if (history.length === 0) return null
   const last = history[history.length - 1]
@@ -12,7 +12,13 @@ function LastWorkoutPreview({ exerciseName }) {
 
   return (
     <div className="bg-surface-3 rounded-xl px-4 py-3">
-      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5">Last workout · {when}</p>
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-[10px] text-gray-500 uppercase tracking-wider">Last workout · {when}</p>
+        <button onClick={onViewHistory} className="text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
+          Full history
+          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 17l6-6 4 4 8-8M17 7h4v4"/></svg>
+        </button>
+      </div>
       {last.sets && last.sets.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">
           {last.sets.map((s, i) => (
@@ -432,6 +438,10 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
     </div>
   )
 
+  if (viewingHistoryFor) {
+    return <ExerciseDetail exerciseName={viewingHistoryFor} onBack={() => setViewingHistoryFor(null)} />
+  }
+
   // Step: Pick muscle group
   if (step === 'pick-group' && equipment) {
     return (
@@ -514,7 +524,7 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
           weightDisplayValues={weightDisplayValues}
         />
 
-        <LastWorkoutPreview exerciseName={selectedExercise.name} />
+        <LastWorkoutPreview exerciseName={selectedExercise.name} onViewHistory={() => setViewingHistoryFor(selectedExercise.name)} />
 
         {error && <p className="text-red-400 text-sm">{error}</p>}
 
@@ -547,10 +557,6 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
 
   // Exercise history mode
   if (step === 'history') {
-    if (viewingHistoryFor) {
-      return <ExerciseDetail exerciseName={viewingHistoryFor} onBack={() => setViewingHistoryFor(null)} />
-    }
-
     const library = getExerciseLibrary().sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0))
     const filtered = library.filter((e) =>
       e.name.toLowerCase().includes(historySearch.toLowerCase())

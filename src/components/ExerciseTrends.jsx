@@ -146,37 +146,79 @@ export function ExerciseDetail({ exerciseName, onBack }) {
 
       {/* Chart */}
       <div className="bg-surface-2 rounded-2xl p-4">
-        <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">
-          {hasWeight ? 'Weight Progression' : 'Calories Burned'}
+        <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">
+          {hasWeight ? 'Weight Progression (kg)' : 'Calories Burned'}
         </p>
-        <svg viewBox="0 0 100 40" className="w-full h-28" preserveAspectRatio="none">
-          {[0, 25, 50, 75, 100].map((y) => (
-            <line key={y} x1="0" x2="100" y1={y * 0.4} y2={y * 0.4} stroke="oklch(0.25 0.01 260)" strokeWidth="0.3" />
-          ))}
-          <polygon
-            points={`0,40 ${sessions.map((s, i) => {
+        {hasWeight && <p className="text-[10px] text-gray-600 mb-2">Number above each point is weight lifted, below it is total reps that session</p>}
+        <div className="relative" style={{ height: '150px', paddingLeft: '28px' }}>
+          {/* Y-axis labels */}
+          <span className="absolute left-0 top-0 text-[9px] text-gray-500 tabular-nums">{Math.round(maxV)}{hasWeight ? 'kg' : ''}</span>
+          <span className="absolute left-0 text-[9px] text-gray-500 tabular-nums" style={{ top: 'calc(50% - 6px)' }}>{Math.round(minV + range / 2)}{hasWeight ? 'kg' : ''}</span>
+          <span className="absolute left-0 text-[9px] text-gray-500 tabular-nums" style={{ bottom: '22px' }}>{Math.round(minV)}{hasWeight ? 'kg' : ''}</span>
+
+          <svg viewBox="0 0 100 40" className="absolute inset-0" style={{ left: '28px', right: 0, height: 'calc(100% - 20px)' }} preserveAspectRatio="none">
+            {[0, 25, 50, 75, 100].map((y) => (
+              <line key={y} x1="0" x2="100" y1={y * 0.4} y2={y * 0.4} stroke="oklch(0.25 0.01 260)" strokeWidth="0.3" />
+            ))}
+            <polygon
+              points={`0,40 ${sessions.map((s, i) => {
+                const x = (i / Math.max(1, sessions.length - 1)) * 100
+                const y = 40 - ((values[i] - minV) / range) * 35
+                return `${x},${y}`
+              }).join(' ')} 100,40`}
+              fill={isUp ? 'rgba(52,211,153,0.1)' : 'rgba(107,114,128,0.1)'}
+            />
+            <polyline
+              points={sessions.map((s, i) => {
+                const x = (i / Math.max(1, sessions.length - 1)) * 100
+                const y = 40 - ((values[i] - minV) / range) * 35
+                return `${x},${y}`
+              }).join(' ')}
+              fill="none"
+              stroke={isUp ? '#34d399' : '#6b7280'}
+              strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+            />
+            {sessions.map((s, i) => {
               const x = (i / Math.max(1, sessions.length - 1)) * 100
               const y = 40 - ((values[i] - minV) / range) * 35
-              return `${x},${y}`
-            }).join(' ')} 100,40`}
-            fill={isUp ? 'rgba(52,211,153,0.1)' : 'rgba(107,114,128,0.1)'}
-          />
-          <polyline
-            points={sessions.map((s, i) => {
-              const x = (i / Math.max(1, sessions.length - 1)) * 100
-              const y = 40 - ((values[i] - minV) / range) * 35
-              return `${x},${y}`
-            }).join(' ')}
-            fill="none"
-            stroke={isUp ? '#34d399' : '#6b7280'}
-            strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-          />
+              return <circle key={i} cx={x} cy={y} r="2" fill={isUp ? '#34d399' : '#6b7280'} />
+            })}
+          </svg>
+
+          {/* Per-point value/reps labels */}
           {sessions.map((s, i) => {
             const x = (i / Math.max(1, sessions.length - 1)) * 100
-            const y = 40 - ((values[i] - minV) / range) * 35
-            return <circle key={i} cx={x} cy={y} r="2" fill={isUp ? '#34d399' : '#6b7280'} />
+            const yFrac = (40 - ((values[i] - minV) / range) * 35) / 40
+            const showBelow = yFrac < 0.2
+            return (
+              <div key={i} className="absolute text-center pointer-events-none" style={{
+                left: `calc(28px + (100% - 28px) * ${x / 100})`,
+                top: `calc((100% - 20px) * ${yFrac} ${showBelow ? '+ 6px' : '- 22px'})`,
+                transform: 'translateX(-50%)', width: '44px',
+              }}>
+                <p className="text-[10px] font-semibold text-white leading-tight tabular-nums">
+                  {hasWeight ? `${s.weight}kg` : `${s.caloriesBurned}`}
+                </p>
+                {hasWeight && s.reps > 0 && (
+                  <p className="text-[8px] text-gray-500 leading-tight tabular-nums">{s.reps} reps</p>
+                )}
+              </div>
+            )
           })}
-        </svg>
+
+          {/* X-axis date labels */}
+          <div className="absolute" style={{ left: '28px', right: 0, bottom: 0, height: '18px' }}>
+            {sessions.map((s, i) => {
+              if (sessions.length > 6 && i !== 0 && i !== sessions.length - 1 && i % Math.ceil(sessions.length / 5) !== 0) return null
+              const x = (i / Math.max(1, sessions.length - 1)) * 100
+              return (
+                <span key={i} className="absolute text-[8px] text-gray-600 whitespace-nowrap" style={{ left: `${x}%`, transform: 'translateX(-50%)' }}>
+                  {s.dateLabel}
+                </span>
+              )
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Session log */}
