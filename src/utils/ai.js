@@ -231,6 +231,35 @@ export async function calculateExerciseCalories(keys, exerciseData, userWeightKg
   })
 }
 
+export async function suggestWorkoutProgression(keys, exerciseName, isStrength, history) {
+  const sessionLines = history.slice(-8).map((h) => {
+    if (h.sets && h.sets.length > 0) {
+      return `${h.dateKey}: ${h.sets.map((s) => `${s.reps}x${s.weight}kg`).join(', ')}`
+    }
+    return `${h.dateKey}: ${h.summary || `${h.durationMin || 0} min, ${h.caloriesBurned || 0} cal`}`
+  }).join('\n')
+
+  const prompt = `You are an expert strength & conditioning coach applying evidence-based progressive overload methodology (double progression: increase reps to the top of the target rep range before adding weight; linear progression: add a small load increment, typically 2.5-5%, once all sets hit the top of the rep range; autoregulation: hold steady or reduce slightly if the last session showed a drop in reps or weight; deload: suggest a reduced-load session after signs of plateau or regression across multiple sessions).
+
+Exercise: "${exerciseName}" (${isStrength ? 'strength/resistance' : 'cardio/duration-based'})
+
+Recent session history (oldest to newest):
+${sessionLines}
+
+Based on this history, apply the appropriate progressive overload method and suggest today's target. Return JSON only:
+{"targetWeight": number_or_null, "targetSets": number_or_null, "targetReps": number_or_null, "targetDurationMin": number_or_null, "method": "double progression|linear progression|maintain|deload", "reasoning": "1-2 sentences referencing the specific numbers from the history above"}
+Use targetWeight/targetSets/targetReps for strength exercises, targetDurationMin for cardio (set the unused fields to null). Ground the suggestion in the actual numbers shown, not generic advice.`
+
+  return runWithFallback(TEXT_CHAIN, keys, (provider) => {
+    if (provider === 'gemini') {
+      return { prompt }
+    }
+    return {
+      messages: [{ role: 'user', content: prompt }],
+    }
+  })
+}
+
 export async function describeExercise(keys, description, weightKg) {
   const prompt = `The user describes an activity: "${description}". Identify what exercise/activity this is, then return JSON with all possible exercises matching their description, grouped by muscle group:
 {"equipment":"str (what they described)","isCardio":bool,"muscleGroupOptions":[{"group":"str","exercises":[{"name":"str","fields":[{"key":"str","label":"str","type":"number|select","unit":"str_or_null","options":["str"]_or_null,"default":num_or_null}]}]}]}

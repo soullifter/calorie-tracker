@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { identifyExercise, calculateExerciseCalories, estimateExerciseCalories, describeExercise } from '../utils/ai'
+import { identifyExercise, calculateExerciseCalories, estimateExerciseCalories, describeExercise, suggestWorkoutProgression } from '../utils/ai'
 import { getExerciseLibrary, saveExerciseToLibrary, getExerciseHistory } from '../utils/storage'
 import { ExerciseDetail } from './ExerciseTrends'
 
@@ -163,6 +163,11 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
   // History flow state
   const [historySearch, setHistorySearch] = useState('')
   const [viewingHistoryFor, setViewingHistoryFor] = useState(null)
+
+  // AI progression suggestion state
+  const [suggestion, setSuggestion] = useState(null)
+  const [suggestionLoading, setSuggestionLoading] = useState(false)
+  const [suggestionError, setSuggestionError] = useState('')
 
   const fileRef = useRef(null)
 
@@ -425,6 +430,33 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
     }
   }
 
+  const handleGetSuggestion = async (isStrength) => {
+    setSuggestionLoading(true)
+    setSuggestionError('')
+    try {
+      const history = getExerciseHistory(selectedExercise.name)
+      const result = await suggestWorkoutProgression(keys, selectedExercise.name, isStrength, history)
+      setSuggestion({ ...result, _exercise: selectedExercise.name })
+    } catch (err) {
+      setSuggestionError(err.message || 'Failed to get suggestion')
+    } finally {
+      setSuggestionLoading(false)
+    }
+  }
+
+  const handleUseSuggestion = (isStrength) => {
+    if (!suggestion) return
+    if (isStrength && suggestion.targetWeight != null) {
+      const sets = suggestion.targetSets || 1
+      updateField('weight', String(suggestion.targetWeight))
+      updateField('reps', String(suggestion.targetReps || ''))
+      setMultiSets(Array.from({ length: sets }, () => ({ weight: String(suggestion.targetWeight), reps: String(suggestion.targetReps || '') })))
+    } else if (suggestion.targetDurationMin != null) {
+      updateField('duration', String(suggestion.targetDurationMin))
+    }
+    setSuggestion(null)
+  }
+
   const BackButton = ({ to }) => (
     <button onClick={() => to ? setStep(to) : reset()} className="text-gray-400 hover:text-white text-sm flex items-center gap-1 mb-3">
       <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
@@ -525,6 +557,43 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
         />
 
         <LastWorkoutPreview exerciseName={selectedExercise.name} onViewHistory={() => setViewingHistoryFor(selectedExercise.name)} />
+
+        {getExerciseHistory(selectedExercise.name).length > 0 && (
+          suggestion && suggestion._exercise === selectedExercise.name ? (
+            <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4 space-y-2 animate-scale-in">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-semibold text-indigo-300 uppercase tracking-wider">Today's Suggestion · {suggestion.method}</span>
+                <button onClick={() => setSuggestion(null)} className="text-gray-500 hover:text-gray-300 text-xs">&times;</button>
+              </div>
+              <p className="text-white text-sm font-medium">
+                {isStrength
+                  ? `${suggestion.targetSets}x${suggestion.targetReps} @ ${suggestion.targetWeight}kg`
+                  : `${suggestion.targetDurationMin} min`}
+              </p>
+              {suggestion.reasoning && <p className="text-xs text-gray-400">{suggestion.reasoning}</p>}
+              <button
+                onClick={() => handleUseSuggestion(isStrength)}
+                className="w-full py-2 rounded-lg bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-500 transition"
+              >
+                Use This
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => handleGetSuggestion(isStrength)}
+              disabled={suggestionLoading}
+              className="w-full py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-medium hover:bg-indigo-500/20 transition disabled:opacity-50 flex items-center justify-center gap-1.5"
+            >
+              {suggestionLoading ? 'Thinking like a coach...' : (
+                <>
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+                  Get AI Suggestion for Today
+                </>
+              )}
+            </button>
+          )
+        )}
+        {suggestionError && <p className="text-red-400 text-xs">{suggestionError}</p>}
 
         {error && <p className="text-red-400 text-sm">{error}</p>}
 
