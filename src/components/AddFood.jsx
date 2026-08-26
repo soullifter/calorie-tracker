@@ -413,7 +413,7 @@ export default function AddFood({ mealType, keys, onAdd, onClose }) {
   }
 
   const handleConfirmMulti = (foods) => {
-    foods.forEach((food) => onAdd(food))
+    onAdd(foods)
     setAddedCount((c) => c + foods.length)
     setMode('added')
   }

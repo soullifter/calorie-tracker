@@ -154,6 +154,11 @@ export default function ExercisePage({ profile }) {
                       <p className="text-xs text-gray-400 mt-0.5">{ex.summary}</p>
                     ) : null}
                     <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                      {ex.loggedAt && (
+                        <span className="text-[10px] text-gray-600">
+                          {new Date(ex.loggedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                        </span>
+                      )}
                       {ex.type && (
                         <span className={`text-[10px] px-2 py-0.5 rounded-full ${
                           ex.type === 'strength' ? 'bg-blue-500/15 text-blue-400' :

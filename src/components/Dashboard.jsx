@@ -84,12 +84,14 @@ export default function Dashboard({ profile, onOpenSettings, initialDate, onBack
     if (newKey <= getDateKey()) setDateKey(newKey)
   }
 
-  const handleAddFood = (mealType, foodEntry) => {
-    const updated = { ...dayLog }
-    updated.meals = { ...updated.meals }
-    updated.meals[mealType] = [...(updated.meals[mealType] || []), foodEntry]
-    saveDayLog(dateKey, updated)
-    setDayLog(updated)
+  const handleAddFood = (mealType, foodEntryOrEntries) => {
+    const entries = Array.isArray(foodEntryOrEntries) ? foodEntryOrEntries : [foodEntryOrEntries]
+    setDayLog((prev) => {
+      const updated = { ...prev, meals: { ...prev.meals } }
+      updated.meals[mealType] = [...(updated.meals[mealType] || []), ...entries]
+      saveDayLog(dateKey, updated)
+      return updated
+    })
     setAddingMeal(null)
   }
 
@@ -228,6 +230,8 @@ export default function Dashboard({ profile, onOpenSettings, initialDate, onBack
                             )}
                           </div>
                           <p className="text-xs text-gray-500 mt-0.5">
+                            {entry.loggedAt && new Date(entry.loggedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                            {entry.loggedAt && ' \u00B7 '}
                             {entry.servings !== 1 ? `${entry.servings} servings` : '1 serving'}
                             {n.protein != null && ` \u00B7 P:${Math.round(n.protein)}g`}
                           </p>
