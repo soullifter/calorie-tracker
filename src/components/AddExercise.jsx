@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { identifyExercise, calculateExerciseCalories, estimateExerciseCalories, describeExercise } from '../utils/ai'
 import { getExerciseLibrary, saveExerciseToLibrary, getExerciseHistory } from '../utils/storage'
+import { ExerciseDetail } from './ExerciseTrends'
 
 function LastWorkoutPreview({ exerciseName }) {
   const history = getExerciseHistory(exerciseName)
@@ -155,6 +156,7 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
 
   // History flow state
   const [historySearch, setHistorySearch] = useState('')
+  const [viewingHistoryFor, setViewingHistoryFor] = useState(null)
 
   const fileRef = useRef(null)
 
@@ -545,10 +547,43 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
 
   // Exercise history mode
   if (step === 'history') {
+    if (viewingHistoryFor) {
+      return <ExerciseDetail exerciseName={viewingHistoryFor} onBack={() => setViewingHistoryFor(null)} />
+    }
+
     const library = getExerciseLibrary().sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0))
     const filtered = library.filter((e) =>
       e.name.toLowerCase().includes(historySearch.toLowerCase())
     )
+
+    const selectFromHistory = (ex) => {
+      setEquipment({ equipment: ex.equipment || ex.name })
+      // Generate default fields if missing
+      let fields = ex.fields && ex.fields.length > 0 ? ex.fields : null
+      if (!fields) {
+        if (ex.type === 'cardio') {
+          fields = [{ key: 'duration', label: 'Duration', type: 'number', unit: 'min' }]
+        } else {
+          fields = [
+            { key: 'weight', label: 'Weight', type: 'number', unit: 'kg' },
+            { key: 'sets', label: 'Sets', type: 'number' },
+            { key: 'reps', label: 'Reps per set', type: 'number' },
+          ]
+        }
+      }
+      setSelectedGroup({ group: ex.muscleGroups?.[0] || 'General', exercises: [{ name: ex.name, fields }] })
+      const defaults = {}
+      fields.forEach((f) => {
+        const defVal = ex.defaultParams?.[f.key]
+        if (defVal != null) defaults[f.key] = String(defVal)
+        else if (f.default != null) defaults[f.key] = String(f.default)
+        else if (f.type === 'select' && f.options?.length) defaults[f.key] = f.options[0]
+      })
+      setSelectedExercise({ name: ex.name, fields })
+      setFieldValues(defaults)
+      setMultiSets([])
+      setStep('fill-fields')
+    }
 
     return (
       <div className="space-y-3">
@@ -563,42 +598,22 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
         ) : (
           <div className="space-y-2 max-h-80 overflow-y-auto">
             {filtered.map((ex) => (
-              <button key={ex.id} onClick={() => {
-                setEquipment({ equipment: ex.equipment || ex.name })
-                // Generate default fields if missing
-                let fields = ex.fields && ex.fields.length > 0 ? ex.fields : null
-                if (!fields) {
-                  if (ex.type === 'cardio') {
-                    fields = [{ key: 'duration', label: 'Duration', type: 'number', unit: 'min' }]
-                  } else {
-                    fields = [
-                      { key: 'weight', label: 'Weight', type: 'number', unit: 'kg' },
-                      { key: 'sets', label: 'Sets', type: 'number' },
-                      { key: 'reps', label: 'Reps per set', type: 'number' },
-                    ]
-                  }
-                }
-                setSelectedGroup({ group: ex.muscleGroups?.[0] || 'General', exercises: [{ name: ex.name, fields }] })
-                const defaults = {}
-                fields.forEach((f) => {
-                  const defVal = ex.defaultParams?.[f.key]
-                  if (defVal != null) defaults[f.key] = String(defVal)
-                  else if (f.default != null) defaults[f.key] = String(f.default)
-                  else if (f.type === 'select' && f.options?.length) defaults[f.key] = f.options[0]
-                })
-                setSelectedExercise({ name: ex.name, fields })
-                setFieldValues(defaults)
-                setMultiSets([])
-                setStep('fill-fields')
-              }}
-                className="w-full p-3 rounded-xl bg-gray-800 border border-gray-700 hover:border-emerald-500/50 text-left transition"
-              >
-                <p className="text-white text-sm font-medium">{ex.name}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  {ex.type && <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">{ex.type}</span>}
-                  {ex.equipment && <span className="text-[10px] text-gray-500">{ex.equipment}</span>}
-                </div>
-              </button>
+              <div key={ex.id} className="flex items-center gap-2 rounded-xl bg-gray-800 border border-gray-700 hover:border-emerald-500/50 transition">
+                <button onClick={() => selectFromHistory(ex)} className="flex-1 p-3 text-left min-w-0">
+                  <p className="text-white text-sm font-medium truncate">{ex.name}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    {ex.type && <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">{ex.type}</span>}
+                    {ex.equipment && <span className="text-[10px] text-gray-500">{ex.equipment}</span>}
+                  </div>
+                </button>
+                <button
+                  onClick={() => setViewingHistoryFor(ex.name)}
+                  title="View history & trends"
+                  className="shrink-0 w-9 h-9 mr-2 rounded-lg flex items-center justify-center text-gray-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 17l6-6 4 4 8-8M17 7h4v4"/></svg>
+                </button>
+              </div>
             ))}
           </div>
         )}
