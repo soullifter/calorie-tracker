@@ -4,6 +4,7 @@ import {
   getFoodLibrary, removeFoodFromLibrary, updateFoodInLibrary, saveFoodToLibrary,
   getExerciseLibrary, removeExerciseFromLibrary, saveExerciseToLibrary,
 } from '../utils/storage'
+import { ExerciseDetail } from './ExerciseTrends'
 
 export function FoodCatalog({ onClose }) {
   const [search, setSearch] = useState('')
@@ -170,6 +171,7 @@ export function ExerciseCatalog({ onClose }) {
   const [expandedId, setExpandedId] = useState(null)
   const [adding, setAdding] = useState(false)
   const [newEx, setNewEx] = useState({ name: '', type: 'strength', equipment: '', muscleGroups: '' })
+  const [viewingHistory, setViewingHistory] = useState(null)
 
   const refresh = () => setItems(getExerciseLibrary())
 
@@ -201,6 +203,16 @@ export function ExerciseCatalog({ onClose }) {
     setNewEx({ name: '', type: 'strength', equipment: '', muscleGroups: '' })
     setAdding(false)
     refresh()
+  }
+
+  if (viewingHistory) {
+    return (
+      <div className="min-h-screen bg-surface-1 pb-24">
+        <div className="max-w-lg mx-auto px-4 pt-6">
+          <ExerciseDetail exerciseName={viewingHistory} onBack={() => setViewingHistory(null)} />
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -321,6 +333,11 @@ export function ExerciseCatalog({ onClose }) {
                       </div>
                     )}
                   </div>
+                  <button onClick={() => setViewingHistory(ex.name)}
+                    className="w-full mt-2 py-2 rounded-lg text-xs text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 transition flex items-center justify-center gap-1.5">
+                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 17l6-6 4 4 8-8M17 7h4v4"/></svg>
+                    View History & Trends
+                  </button>
                   <button onClick={() => handleDelete(ex.id)}
                     className="w-full mt-2 py-2 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition">
                     Delete from Library

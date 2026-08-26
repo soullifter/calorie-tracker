@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { getDateKey } from '../utils/calculations'
-import { getDayLog } from '../utils/storage'
+import { getDayLog, getExerciseHistory } from '../utils/storage'
 
 const MUSCLE_GROUPS = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core']
 const MUSCLE_COLORS = {
@@ -70,6 +70,147 @@ function sessionStats(ex) {
   }
 }
 
+// Full trend/history view for a single named exercise, across all logged days
+export function ExerciseDetail({ exerciseName, onBack }) {
+  const history = useMemo(() => getExerciseHistory(exerciseName), [exerciseName])
+  const sessions = useMemo(() => history.map((ex) => ({
+    ...sessionStats(ex),
+    dateLabel: new Date(ex.dateKey + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    caloriesBurned: ex.caloriesBurned || 0,
+    summary: ex.summary || '',
+    setsRaw: ex.sets || null,
+  })), [history])
+
+  const BackBtn = () => (
+    <button onClick={onBack} className="text-gray-400 hover:text-white text-sm flex items-center gap-1">
+      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+      Back
+    </button>
+  )
+
+  if (sessions.length === 0) {
+    return (
+      <div className="space-y-3">
+        <BackBtn />
+        <p className="text-gray-600 text-sm text-center py-8">No history for {exerciseName} yet</p>
+      </div>
+    )
+  }
+
+  const hasWeight = sessions.some((s) => s.weight > 0)
+  const values = sessions.map((s) => (hasWeight ? s.weight : s.caloriesBurned))
+  const minV = Math.min(...values)
+  const maxV = Math.max(...values)
+  const range = maxV - minV || 1
+  const prWeight = hasWeight ? Math.max(...sessions.map((s) => s.weight)) : null
+  const first = sessions[0]
+  const last = sessions[sessions.length - 1]
+  const weightDiff = hasWeight ? Math.round((last.weight - first.weight) * 10) / 10 : 0
+  const isUp = weightDiff > 0
+  const totalBurned = sessions.reduce((s, x) => s + x.caloriesBurned, 0)
+
+  return (
+    <div className="space-y-5 animate-scale-in">
+      <BackBtn />
+
+      <div>
+        <h3 className="text-white font-semibold text-lg">{exerciseName}</h3>
+        <p className="text-xs text-gray-500 mt-0.5">
+          {sessions.length} session{sessions.length !== 1 ? 's' : ''} logged \u00B7 {totalBurned} cal burned total
+        </p>
+      </div>
+
+      {/* Stat cards */}
+      <div className="grid grid-cols-3 gap-2">
+        {hasWeight && (
+          <div className="bg-surface-2 rounded-xl p-3 text-center">
+            <p className="text-lg font-bold text-white tabular-nums">{prWeight}kg</p>
+            <p className="text-[9px] text-gray-500 uppercase mt-0.5">PR (max)</p>
+          </div>
+        )}
+        <div className="bg-surface-2 rounded-xl p-3 text-center">
+          <p className="text-lg font-bold text-white tabular-nums">
+            {hasWeight ? `${last.weight}kg` : `${last.caloriesBurned}cal`}
+          </p>
+          <p className="text-[9px] text-gray-500 uppercase mt-0.5">Last session</p>
+        </div>
+        {hasWeight && sessions.length >= 2 && (
+          <div className="bg-surface-2 rounded-xl p-3 text-center">
+            <p className={`text-lg font-bold tabular-nums ${isUp ? 'text-emerald-400' : weightDiff < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+              {weightDiff > 0 ? '+' : ''}{weightDiff}kg
+            </p>
+            <p className="text-[9px] text-gray-500 uppercase mt-0.5">Change</p>
+          </div>
+        )}
+      </div>
+
+      {/* Chart */}
+      <div className="bg-surface-2 rounded-2xl p-4">
+        <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">
+          {hasWeight ? 'Weight Progression' : 'Calories Burned'}
+        </p>
+        <svg viewBox="0 0 100 40" className="w-full h-28" preserveAspectRatio="none">
+          {[0, 25, 50, 75, 100].map((y) => (
+            <line key={y} x1="0" x2="100" y1={y * 0.4} y2={y * 0.4} stroke="oklch(0.25 0.01 260)" strokeWidth="0.3" />
+          ))}
+          <polygon
+            points={`0,40 ${sessions.map((s, i) => {
+              const x = (i / Math.max(1, sessions.length - 1)) * 100
+              const y = 40 - ((values[i] - minV) / range) * 35
+              return `${x},${y}`
+            }).join(' ')} 100,40`}
+            fill={isUp ? 'rgba(52,211,153,0.1)' : 'rgba(107,114,128,0.1)'}
+          />
+          <polyline
+            points={sessions.map((s, i) => {
+              const x = (i / Math.max(1, sessions.length - 1)) * 100
+              const y = 40 - ((values[i] - minV) / range) * 35
+              return `${x},${y}`
+            }).join(' ')}
+            fill="none"
+            stroke={isUp ? '#34d399' : '#6b7280'}
+            strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+          />
+          {sessions.map((s, i) => {
+            const x = (i / Math.max(1, sessions.length - 1)) * 100
+            const y = 40 - ((values[i] - minV) / range) * 35
+            return <circle key={i} cx={x} cy={y} r="2" fill={isUp ? '#34d399' : '#6b7280'} />
+          })}
+        </svg>
+      </div>
+
+      {/* Session log */}
+      <div>
+        <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">All Sessions</p>
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {sessions.slice().reverse().map((s, i) => (
+            <div key={i} className="bg-surface-2 rounded-xl px-4 py-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400">{s.dateLabel}</span>
+                <span className="text-emerald-400 text-xs tabular-nums">-{s.caloriesBurned}cal</span>
+              </div>
+              {s.setsRaw && s.setsRaw.length > 0 ? (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {s.setsRaw.map((set, si) => (
+                    <span key={si} className="text-[10px] px-1.5 py-0.5 rounded bg-surface-3 text-gray-300">
+                      {set.reps}x{set.weight}kg
+                    </span>
+                  ))}
+                </div>
+              ) : s.summary ? (
+                <p className="text-xs text-gray-400 mt-1">{s.summary}</p>
+              ) : hasWeight ? (
+                <p className="text-xs text-gray-400 mt-1">{s.sets}x{s.reps} @ {s.weight}kg</p>
+              ) : null}
+              {s.volume > 0 && <p className="text-[10px] text-gray-600 mt-1">volume: {s.volume}</p>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Weekly exercise frequency + calories burned chart
 export function WeeklyExerciseChart() {
   const days = useMemo(getLast7DaysData, [])
@@ -133,9 +274,14 @@ const RANGE_OPTIONS = [
 // Muscle group detail view
 function MuscleGroupDetail({ group, onBack }) {
   const [rangeDays, setRangeDays] = useState(30)
+  const [viewingExercise, setViewingExercise] = useState(null)
   const days = useMemo(getLast7DaysData, [])
   const allExercises = useMemo(() => getExercisesForDays(rangeDays), [rangeDays])
   const colors = MUSCLE_COLORS[group] || MUSCLE_COLORS.Chest
+
+  if (viewingExercise) {
+    return <ExerciseDetail exerciseName={viewingExercise} onBack={() => setViewingExercise(null)} />
+  }
 
   // This week's exercises for this group
   const weekExercises = []
@@ -243,7 +389,10 @@ function MuscleGroupDetail({ group, onBack }) {
         return (
           <div key={name}>
             <div className="flex items-center justify-between mb-2">
-              <h4 className="text-sm font-medium text-gray-300">{name}</h4>
+              <button onClick={() => setViewingExercise(name)} className="text-sm font-medium text-gray-300 hover:text-emerald-400 transition flex items-center gap-1">
+                {name}
+                <svg className="w-3 h-3 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 17l6-6 4 4 8-8M17 7h4v4"/></svg>
+              </button>
               {sessions.length >= 2 && hasWeight && (
                 <span className={`text-xs font-semibold ${isUp ? 'text-emerald-400' : weightDiff < 0 ? 'text-red-400' : 'text-gray-500'}`}>
                   {weightDiff > 0 ? '+' : ''}{weightDiff}kg
@@ -370,6 +519,7 @@ export function MuscleGroupMap() {
 
 // Keep progressive overload as standalone for home page summary
 export function ProgressiveOverload() {
+  const [viewingExercise, setViewingExercise] = useState(null)
   const allExercises = useMemo(() => getExercisesForDays(30), [])
 
   const exerciseHistory = {}
@@ -388,6 +538,14 @@ export function ProgressiveOverload() {
     .slice(0, 5)
 
   if (repeatedExercises.length === 0) return null
+
+  if (viewingExercise) {
+    return (
+      <div className="bg-surface-2 rounded-2xl p-5 animate-fade-in">
+        <ExerciseDetail exerciseName={viewingExercise} onBack={() => setViewingExercise(null)} />
+      </div>
+    )
+  }
 
   return (
     <div className="bg-surface-2 rounded-2xl p-5 animate-fade-in">
@@ -412,7 +570,7 @@ export function ProgressiveOverload() {
           return (
             <div key={name}>
               <div className="flex items-center justify-between mb-1">
-                <p className="text-sm text-gray-200 font-medium truncate flex-1">{name}</p>
+                <button onClick={() => setViewingExercise(name)} className="text-sm text-gray-200 font-medium truncate flex-1 text-left hover:text-emerald-400 transition">{name}</button>
                 <span className={`text-xs font-medium ${isUp ? 'text-emerald-400' : weightDiff < 0 ? 'text-red-400' : 'text-gray-500'}`}>
                   {weightDiff > 0 ? '+' : ''}{weightDiff}kg
                 </span>

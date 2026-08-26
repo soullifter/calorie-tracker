@@ -1,6 +1,31 @@
 import { useState, useRef } from 'react'
 import { identifyExercise, calculateExerciseCalories, estimateExerciseCalories, describeExercise } from '../utils/ai'
-import { getExerciseLibrary, saveExerciseToLibrary } from '../utils/storage'
+import { getExerciseLibrary, saveExerciseToLibrary, getExerciseHistory } from '../utils/storage'
+
+function LastWorkoutPreview({ exerciseName }) {
+  const history = getExerciseHistory(exerciseName)
+  if (history.length === 0) return null
+  const last = history[history.length - 1]
+  const daysAgo = Math.max(0, Math.round((Date.now() - new Date(last.dateKey + 'T12:00:00').getTime()) / 86400000))
+  const when = daysAgo === 0 ? 'Today' : daysAgo === 1 ? 'Yesterday' : `${daysAgo} days ago`
+
+  return (
+    <div className="bg-surface-3 rounded-xl px-4 py-3">
+      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5">Last workout · {when}</p>
+      {last.sets && last.sets.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {last.sets.map((s, i) => (
+            <span key={i} className="text-xs px-2 py-1 rounded-lg bg-gray-800 text-gray-300">{s.reps}x{s.weight}kg</span>
+          ))}
+        </div>
+      ) : last.summary ? (
+        <p className="text-sm text-gray-300">{last.summary}</p>
+      ) : (
+        <p className="text-sm text-gray-300">{last.caloriesBurned} cal burned</p>
+      )}
+    </div>
+  )
+}
 
 const QUICK_EXERCISES = [
   'Walking', 'Running', 'Cycling', 'Swimming', 'Jump Rope',
@@ -486,6 +511,8 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
           onChange={updateField}
           weightDisplayValues={weightDisplayValues}
         />
+
+        <LastWorkoutPreview exerciseName={selectedExercise.name} />
 
         {error && <p className="text-red-400 text-sm">{error}</p>}
 

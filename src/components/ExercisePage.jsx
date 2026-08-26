@@ -3,11 +3,13 @@ import { getDateKey, sumNutrients } from '../utils/calculations'
 import { getDayLog, saveDayLog, getWeightLog } from '../utils/storage'
 import { MEAL_TYPES } from '../utils/constants'
 import AddExercise from './AddExercise'
+import { ExerciseDetail } from './ExerciseTrends'
 
 export default function ExercisePage({ profile }) {
   const [dateKey, setDateKey] = useState(getDateKey())
   const [dayLog, setDayLog] = useState(getDayLog(dateKey))
   const [adding, setAdding] = useState(false)
+  const [viewingExercise, setViewingExercise] = useState(null)
 
   useEffect(() => {
     setDayLog(getDayLog(dateKey))
@@ -71,6 +73,16 @@ export default function ExercisePage({ profile }) {
 
   const isToday = dateKey === getDateKey()
   const displayDate = new Date(dateKey + 'T12:00:00')
+
+  if (viewingExercise) {
+    return (
+      <div className="min-h-screen bg-surface-1 pb-24">
+        <div className="max-w-lg mx-auto px-4 pt-6">
+          <ExerciseDetail exerciseName={viewingExercise} onBack={() => setViewingExercise(null)} />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-surface-1 pb-24">
@@ -141,7 +153,13 @@ export default function ExercisePage({ profile }) {
               <div key={ex.id} className="py-3 border-b border-white/5 last:border-0 animate-fade-in" style={{ animationDelay: `${i * 50}ms` }}>
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-200">{ex.exercise}</p>
+                    <button
+                      onClick={() => setViewingExercise(ex.exercise)}
+                      className="text-sm font-medium text-gray-200 hover:text-emerald-400 transition text-left flex items-center gap-1"
+                    >
+                      {ex.exercise}
+                      <svg className="w-3 h-3 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 17l6-6 4 4 8-8M17 7h4v4"/></svg>
+                    </button>
                     {ex.sets && ex.sets.length > 0 ? (
                       <div className="flex flex-wrap gap-1 mt-0.5">
                         {ex.sets.map((s, si) => (

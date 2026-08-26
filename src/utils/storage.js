@@ -119,6 +119,22 @@ export function saveDayLog(dateKey, dayLog) {
   set(KEYS.dailyLogs, logs)
 }
 
+// Full history of a specific exercise (by name, case-insensitive) across all logged days
+export function getExerciseHistory(exerciseName) {
+  const logs = get(KEYS.dailyLogs) || {}
+  const nameKey = (exerciseName || '').toLowerCase().trim()
+  const history = []
+  for (const [dateKey, dayLog] of Object.entries(logs)) {
+    for (const ex of (dayLog.exercises || [])) {
+      if ((ex.exercise || '').toLowerCase().trim() === nameKey) {
+        history.push({ ...ex, dateKey })
+      }
+    }
+  }
+  history.sort((a, b) => a.dateKey.localeCompare(b.dateKey) || (a.loggedAt || 0) - (b.loggedAt || 0))
+  return history
+}
+
 // Weight Log
 export function getWeightLog() {
   return get(KEYS.weightLog) || []
