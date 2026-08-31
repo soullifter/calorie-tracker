@@ -135,6 +135,18 @@ export function getExerciseHistory(exerciseName) {
   return history
 }
 
+// All dateKeys that have any meal entries logged, sorted ascending
+export function getLoggedDates() {
+  const logs = get(KEYS.dailyLogs) || {}
+  const dates = []
+  for (const [dateKey, dayLog] of Object.entries(logs)) {
+    const hasMeals = MEAL_TYPES_INTERNAL.some((m) => (dayLog.meals?.[m] || []).length > 0)
+    if (hasMeals) dates.push(dateKey)
+  }
+  return dates.sort()
+}
+const MEAL_TYPES_INTERNAL = ['breakfast', 'lunch', 'dinner', 'snacks']
+
 // Weight Log
 export function getWeightLog() {
   return get(KEYS.weightLog) || []
