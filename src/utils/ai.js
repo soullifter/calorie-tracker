@@ -260,6 +260,39 @@ Use targetWeight/targetSets/targetReps for strength exercises, targetDurationMin
   })
 }
 
+export async function suggestMeals(keys, { remaining, gaps, foodLibrary, context }) {
+  const gapLines = gaps.slice(0, 10).map((g) =>
+    `${g.label}: need ${g.remaining}${g.unit} more (${g.pct}% of daily target still missing)`
+  ).join('\n')
+
+  const libraryLines = !context && foodLibrary.length > 0
+    ? foodLibrary.slice(0, 25).map((f) =>
+        `${f.name}: ${f.calories}cal, P:${f.protein}g, C:${f.carbs}g, F:${f.fat}g per ${f.serving}`
+      ).join('\n')
+    : ''
+
+  const prompt = `You are a sports nutrition coach. The user has already eaten today and needs to cover remaining nutritional gaps with their next meal(s).
+
+REMAINING TARGETS TO HIT:
+Calories: ${remaining.calories} kcal
+Protein: ${remaining.protein}g | Carbs: ${remaining.carbs}g | Fat: ${remaining.fat}g
+
+BIGGEST NUTRIENT GAPS TO PRIORITIZE:
+${gapLines}
+
+${context
+  ? `CONTEXT: The user wants to eat at/from: "${context}". Suggest specific menu items from this place with realistic portions and nutritional values based on your knowledge of their menu. Use real menu items and realistic portion sizes.`
+  : `USER'S FOOD HISTORY:\n${libraryLines || '(no history yet)'}\n\nPrefer suggesting from these familiar foods when possible. You can also suggest other common foods if needed to fill nutrient gaps.`}
+
+Suggest 2-4 food items with specific quantities that together best cover the remaining calories AND nutrient gaps. Return JSON only:
+{"suggestions":[{"name":"str","quantity":"str (e.g. '1 bowl','200g','2 scoops')","servingWeightG":num_or_null,"nutrients":{"calories":num,"protein":num,"carbs":num,"fat":num,"saturatedFat":num_or_null,"transFat":num_or_null,"fiber":num_or_null,"sugar":num_or_null,"sodium":num_or_null,"cholesterol":num_or_null,"potassium":num_or_null,"calcium":num_or_null,"iron":num_or_null,"vitaminA":num_or_null,"vitaminC":num_or_null,"vitaminD":num_or_null,"vitaminB12":num_or_null,"zinc":num_or_null,"magnesium":num_or_null,"omega3":num_or_null},"reasoning":"1 sentence: why this food and which gaps it fills"}],"summary":"1 sentence overall strategy"}`
+
+  return runWithFallback(TEXT_CHAIN, keys, (provider) => {
+    if (provider === 'gemini') return { prompt }
+    return { messages: [{ role: 'user', content: prompt }] }
+  })
+}
+
 export async function describeExercise(keys, description, weightKg) {
   const prompt = `The user describes an activity: "${description}". Identify what exercise/activity this is, then return JSON with all possible exercises matching their description, grouped by muscle group:
 {"equipment":"str (what they described)","isCardio":bool,"muscleGroupOptions":[{"group":"str","exercises":[{"name":"str","fields":[{"key":"str","label":"str","type":"number|select","unit":"str_or_null","options":["str"]_or_null,"default":num_or_null}]}]}]}

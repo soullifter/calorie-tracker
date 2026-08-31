@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
-import { MEAL_LABELS, MEAL_TYPES } from '../utils/constants'
+import { useState, useEffect, useMemo } from 'react'
+import { MEAL_LABELS, MEAL_TYPES, NUTRIENTS, getDailyRDA } from '../utils/constants'
 import { getDateKey, sumNutrients } from '../utils/calculations'
-import { getDayLog, saveDayLog } from '../utils/storage'
+import { getDayLog, saveDayLog, getFoodLibrary } from '../utils/storage'
+import { suggestMeals } from '../utils/ai'
 import CalorieRing from './CalorieRing'
 import MacroBar from './MacroBar'
 import NutrientDetails from './NutrientDetails'
@@ -51,6 +52,12 @@ export default function Dashboard({ profile, onOpenSettings, initialDate, onBack
   const [showNutrients, setShowNutrients] = useState(false)
   const [expandedEntry, setExpandedEntry] = useState(null)
   const [editingEntry, setEditingEntry] = useState(null) // { meal, logId, servings }
+  const [showSuggest, setShowSuggest] = useState(false)
+  const [suggestContext, setSuggestContext] = useState('')
+  const [suggestions, setSuggestions] = useState(null)
+  const [suggestLoading, setSuggestLoading] = useState(false)
+  const [suggestError, setSuggestError] = useState('')
+  const [suggestAddedMeal, setSuggestAddedMeal] = useState('snacks')
 
   const handleEditFood = (meal, logId, newServings) => {
     const updated = { ...dayLog, meals: { ...dayLog.meals } }
@@ -103,6 +110,63 @@ export default function Dashboard({ profile, onOpenSettings, initialDate, onBack
     setDayLog(updated)
   }
 
+
+  const handleGetSuggestions = async () => {
+    setSuggestLoading(true)
+    setSuggestError('')
+    try {
+      const rda = getDailyRDA(profile.gender, profile.targets.calories)
+      const targets = { calories: profile.targets.calories, protein: profile.targets.protein, carbs: profile.targets.carbs, fat: profile.targets.fat, ...rda }
+
+      const remaining = {}
+      const gaps = []
+      for (const n of NUTRIENTS) {
+        const target = targets[n.key]
+        if (!target) continue
+        const consumed = totals[n.key] || 0
+        const left = Math.max(0, Math.round((target - consumed) * 10) / 10)
+        remaining[n.key] = left
+        if (left > 0) {
+          const pct = Math.round((left / target) * 100)
+          gaps.push({ key: n.key, label: n.label, remaining: left, unit: n.unit, pct })
+        }
+      }
+      gaps.sort((a, b) => b.pct - a.pct)
+
+      const lib = getFoodLibrary().map((f) => ({
+        name: f.name,
+        calories: Math.round(f.nutrients?.calories || 0),
+        protein: Math.round(f.nutrients?.protein || 0),
+        carbs: Math.round(f.nutrients?.carbs || 0),
+        fat: Math.round(f.nutrients?.fat || 0),
+        serving: f.servingSize || '1 serving',
+      }))
+
+      const keys = { geminiKey: profile.geminiApiKey, groqKey: profile.groqApiKey }
+      const result = await suggestMeals(keys, { remaining, gaps, foodLibrary: lib, context: suggestContext.trim() })
+      setSuggestions(result)
+    } catch (err) {
+      setSuggestError(err.message || 'Failed to get suggestions')
+    } finally {
+      setSuggestLoading(false)
+    }
+  }
+
+  const handleAddSuggestion = (item) => {
+    const entry = {
+      logId: `log_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      name: `${item.name} (${item.quantity})`,
+      servingSize: item.quantity,
+      servingWeightG: item.servingWeightG || null,
+      servingUnit: 'serving',
+      servingUnitAmount: 1,
+      servings: 1,
+      nutrients: item.nutrients || {},
+      source: 'ai-suggestion',
+      loggedAt: Date.now(),
+    }
+    handleAddFood(suggestAddedMeal, entry)
+  }
 
   const isToday = dateKey === getDateKey()
   const displayDate = new Date(dateKey + 'T12:00:00')
@@ -186,6 +250,115 @@ export default function Dashboard({ profile, onOpenSettings, initialDate, onBack
           <svg className={`w-3 h-3 transition-transform ${showNutrients ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
         </button>
         {showNutrients && <NutrientDetails totals={totals} targets={profile.targets} gender={profile.gender} />}
+
+        {/* AI Meal Suggestions */}
+        {isToday && (
+          <div className="bg-surface-2 rounded-2xl overflow-hidden animate-fade-in">
+            <button
+              onClick={() => { setShowSuggest(!showSuggest); setSuggestions(null); setSuggestError('') }}
+              className="w-full px-5 py-4 flex items-center justify-between hover:bg-surface-3/30 transition"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-indigo-400">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+                </span>
+                <span className="text-white font-semibold">What should I eat?</span>
+              </div>
+              <svg className={`w-4 h-4 text-gray-500 transition-transform ${showSuggest ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+
+            {showSuggest && (
+              <div className="px-5 pb-5 space-y-4 animate-scale-in">
+                {/* Remaining summary */}
+                <div className="grid grid-cols-4 gap-2 text-center">
+                  {[
+                    { label: 'Cal', val: Math.max(0, Math.round(profile.targets.calories + totalBurned - (totals.calories || 0))), color: 'text-white' },
+                    { label: 'Protein', val: Math.max(0, Math.round(profile.targets.protein - (totals.protein || 0))), u: 'g', color: 'text-blue-400' },
+                    { label: 'Carbs', val: Math.max(0, Math.round(profile.targets.carbs - (totals.carbs || 0))), u: 'g', color: 'text-amber-400' },
+                    { label: 'Fat', val: Math.max(0, Math.round(profile.targets.fat - (totals.fat || 0))), u: 'g', color: 'text-orange-400' },
+                  ].map((m) => (
+                    <div key={m.label} className="bg-surface-3 rounded-xl p-2">
+                      <p className={`text-sm font-semibold tabular-nums ${m.color}`}>{m.val}{m.u || ''}</p>
+                      <p className="text-[9px] text-gray-500 uppercase">{m.label} left</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Context input */}
+                <div>
+                  <input
+                    type="text"
+                    value={suggestContext}
+                    onChange={(e) => setSuggestContext(e.target.value)}
+                    placeholder="Restaurant, cuisine, or leave empty for history-based..."
+                    className="w-full p-3 rounded-xl bg-surface-3 text-white text-sm placeholder-gray-600 border border-white/5 focus:outline-none focus:border-indigo-500/50"
+                  />
+                </div>
+
+                <button
+                  onClick={handleGetSuggestions}
+                  disabled={suggestLoading}
+                  className="w-full py-3 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-500 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {suggestLoading ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="30 70" strokeLinecap="round" /></svg>
+                      Analyzing your gaps...
+                    </>
+                  ) : 'Get Suggestions'}
+                </button>
+
+                {suggestError && <p className="text-red-400 text-xs">{suggestError}</p>}
+
+                {/* Results */}
+                {suggestions && (
+                  <div className="space-y-3">
+                    {suggestions.summary && (
+                      <p className="text-xs text-gray-400 italic">{suggestions.summary}</p>
+                    )}
+
+                    {/* Meal selector */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-gray-500 uppercase">Add to:</span>
+                      {MEAL_TYPES.map((m) => (
+                        <button
+                          key={m}
+                          onClick={() => setSuggestAddedMeal(m)}
+                          className={`text-xs px-2.5 py-1 rounded-lg transition ${suggestAddedMeal === m ? 'bg-indigo-600 text-white' : 'bg-surface-3 text-gray-500 hover:text-gray-300'}`}
+                        >{MEAL_LABELS[m]}</button>
+                      ))}
+                    </div>
+
+                    {(suggestions.suggestions || []).map((item, i) => (
+                      <div key={i} className="bg-surface-3 rounded-xl p-4 space-y-2">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="text-white text-sm font-medium">{item.name}</p>
+                            <p className="text-xs text-gray-500">{item.quantity}</p>
+                          </div>
+                          <span className="text-sm font-semibold text-white tabular-nums shrink-0">{Math.round(item.nutrients?.calories || 0)} cal</span>
+                        </div>
+                        <div className="flex gap-3 text-xs">
+                          <span className="text-blue-400">P: {Math.round(item.nutrients?.protein || 0)}g</span>
+                          <span className="text-amber-400">C: {Math.round(item.nutrients?.carbs || 0)}g</span>
+                          <span className="text-orange-400">F: {Math.round(item.nutrients?.fat || 0)}g</span>
+                          {item.nutrients?.fiber > 0 && <span className="text-green-400">Fiber: {Math.round(item.nutrients.fiber)}g</span>}
+                        </div>
+                        {item.reasoning && <p className="text-[11px] text-gray-500">{item.reasoning}</p>}
+                        <button
+                          onClick={() => handleAddSuggestion(item)}
+                          className="w-full py-2 rounded-lg bg-indigo-500/15 text-indigo-300 text-xs font-medium hover:bg-indigo-500/25 transition"
+                        >
+                          Add to {MEAL_LABELS[suggestAddedMeal]}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Meals */}
         {MEAL_TYPES.map((meal, i) => {
