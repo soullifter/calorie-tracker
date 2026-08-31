@@ -16,7 +16,14 @@ function get(key) {
 }
 
 function set(key, value) {
-  localStorage.setItem(key, JSON.stringify(value))
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch (e) {
+    console.error(`localStorage write failed for ${key}:`, e)
+    if (e.name === 'QuotaExceededError') {
+      alert('Storage full. Please export a backup and clear old data in Settings.')
+    }
+  }
 }
 
 // Profile

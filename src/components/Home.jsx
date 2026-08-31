@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { smoothPath, smoothAreaPath, toChartPoints, ChartGradient } from '../utils/chart'
 import { getDateKey, sumNutrients } from '../utils/calculations'
 import { getDayLog, getWeightLog, getLoggedDates } from '../utils/storage'
 import { MEAL_TYPES } from '../utils/constants'
@@ -31,12 +32,6 @@ function WeightMini({ weightLog, currentWeight, targetWeight, onOpenDetail }) {
   const maxW = Math.max(...recent.map((e) => e.weight)) + 1
   const range = maxW - minW
 
-  const points = recent.map((e, i) => {
-    const x = (i / Math.max(1, recent.length - 1)) * 100
-    const y = 100 - ((e.weight - minW) / range) * 100
-    return `${x},${y}`
-  }).join(' ')
-
   return (
     <button onClick={onOpenDetail} className="w-full text-left bg-surface-2 rounded-2xl p-5 animate-fade-in hover:bg-surface-3/50 transition">
       <div className="flex items-center justify-between mb-3">
@@ -48,24 +43,20 @@ function WeightMini({ weightLog, currentWeight, targetWeight, onOpenDetail }) {
       </div>
 
       {/* Mini line chart */}
-      <svg viewBox="0 0 100 50" className="w-full h-16" preserveAspectRatio="none">
-        {/* Target line */}
-        <line
-          x1="0" x2="100"
-          y1={100 - ((targetWeight - minW) / range) * 100}
-          y2={100 - ((targetWeight - minW) / range) * 100}
-          stroke="#374151" strokeWidth="0.5" strokeDasharray="2,2"
-        />
-        <polyline
-          points={points}
-          fill="none" stroke="#818cf8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-        />
-        {recent.map((e, i) => {
-          const x = (i / Math.max(1, recent.length - 1)) * 100
-          const y = 100 - ((e.weight - minW) / range) * 100
-          return <circle key={i} cx={x} cy={y} r="1.5" fill="#818cf8" />
-        })}
-      </svg>
+      {(() => {
+        const vals = recent.map((e) => e.weight)
+        const pts = toChartPoints(vals, { width: 100, height: 50, padding: 4 })
+        const targetY = 4 + ((Math.max(...vals) - targetWeight) / range) * 42
+        return (
+          <svg viewBox="0 0 100 50" className="w-full h-16" preserveAspectRatio="none">
+            <defs><ChartGradient id="wmGrad" color="#818cf8" /></defs>
+            <line x1="0" x2="100" y1={targetY} y2={targetY} stroke="#374151" strokeWidth="0.5" strokeDasharray="2,2" />
+            <path d={smoothAreaPath(pts, 50)} fill="url(#wmGrad)" />
+            <path d={smoothPath(pts)} fill="none" stroke="#818cf8" strokeWidth="1.8" strokeLinecap="round" />
+            {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="1.8" fill="#818cf8" stroke="#1a1a2e" strokeWidth="0.5" />)}
+          </svg>
+        )
+      })()}
 
       <div className="flex justify-between mt-2 text-xs">
         <span className={`${totalLost > 0 ? 'text-emerald-400' : 'text-gray-500'}`}>
@@ -171,46 +162,32 @@ function WeightDetail({ weightLog, targetWeight, onBack }) {
           <span className="absolute left-0 text-[9px] text-gray-500 tabular-nums" style={{ top: 'calc(50% - 6px)' }}>{Math.round((minW + range / 2) * 10) / 10}</span>
           <span className="absolute left-0 text-[9px] text-gray-500 tabular-nums" style={{ bottom: '22px' }}>{Math.round(minW * 10) / 10}</span>
 
-          <svg viewBox="0 0 100 40" className="absolute" style={{ left: '28px', right: 0, top: 0, height: 'calc(100% - 20px)' }} preserveAspectRatio="none">
-            {[0, 25, 50, 75, 100].map((y) => (
-              <line key={y} x1="0" x2="100" y1={y * 0.4} y2={y * 0.4} stroke="oklch(0.25 0.01 260)" strokeWidth="0.3" />
-            ))}
-            <line
-              x1="0" x2="100"
-              y1={40 - ((targetWeight - minW) / range) * 40}
-              y2={40 - ((targetWeight - minW) / range) * 40}
-              stroke="#6b7280" strokeWidth="0.4" strokeDasharray="2,2"
-            />
-            <polygon
-              points={`0,40 ${entries.map((e, i) => {
-                const x = (i / Math.max(1, entries.length - 1)) * 100
-                const y = 40 - ((e.weight - minW) / range) * 40
-                return `${x},${y}`
-              }).join(' ')} 100,40`}
-              fill="rgba(129,140,248,0.1)"
-            />
-            <polyline
-              points={entries.map((e, i) => {
-                const x = (i / Math.max(1, entries.length - 1)) * 100
-                const y = 40 - ((e.weight - minW) / range) * 40
-                return `${x},${y}`
-              }).join(' ')}
-              fill="none" stroke="#818cf8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-            />
-            {entries.map((e, i) => {
-              const x = (i / Math.max(1, entries.length - 1)) * 100
-              const y = 40 - ((e.weight - minW) / range) * 40
-              return <circle key={i} cx={x} cy={y} r="1.8" fill="#818cf8" />
-            })}
-          </svg>
+          {(() => {
+            const pts = toChartPoints(values, { width: 100, height: 40, padding: 2.5 })
+            const targetY = 2.5 + ((maxW - targetWeight) / range) * 35
+            return (
+              <svg viewBox="0 0 100 40" className="absolute" style={{ left: '28px', right: 0, top: 0, height: 'calc(100% - 20px)' }} preserveAspectRatio="none">
+                <defs><ChartGradient id="wdGrad" color="#818cf8" /></defs>
+                {[0, 50, 100].map((y) => (
+                  <line key={y} x1="0" x2="100" y1={y * 0.4} y2={y * 0.4} stroke="oklch(0.22 0.01 260)" strokeWidth="0.3" />
+                ))}
+                <line x1="0" x2="100" y1={targetY} y2={targetY} stroke="#6b7280" strokeWidth="0.4" strokeDasharray="2,2" />
+                <path d={smoothAreaPath(pts, 40)} fill="url(#wdGrad)" />
+                <path d={smoothPath(pts)} fill="none" stroke="#818cf8" strokeWidth="1.8" strokeLinecap="round" />
+                {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="2" fill="#818cf8" stroke="#1a1a2e" strokeWidth="0.6" />)}
+              </svg>
+            )
+          })()}
 
-          {/* Per-point weight labels (only PR-low, PR-high, first, last to avoid clutter on long ranges) */}
+          {/* Per-point weight labels */}
           {entries.map((e, i) => {
             const isEdge = i === 0 || i === entries.length - 1
             const isExtreme = e.weight === minAll || e.weight === maxAll
             if (entries.length > 12 && !isEdge && !isExtreme) return null
             const x = (i / Math.max(1, entries.length - 1)) * 100
-            const yFrac = (40 - ((e.weight - minW) / range) * 40) / 40
+            const vArr = entries.map((en) => en.weight)
+            const mn = Math.min(...vArr); const mx = Math.max(...vArr); const rng = mx - mn || 1
+            const yFrac = (2.5 + ((mx - e.weight) / rng) * 35) / 40
             const showBelow = yFrac < 0.2
             return (
               <div key={i} className="absolute text-center pointer-events-none" style={{
@@ -419,26 +396,24 @@ function BMIDetail({ weightLog, heightCm, currentWeight, onBack }) {
           <span className="absolute left-0 text-[9px] text-gray-500 tabular-nums" style={{ top: 'calc(50% - 6px)' }}>{Math.round((minB + range / 2) * 10) / 10}</span>
           <span className="absolute left-0 text-[9px] text-gray-500 tabular-nums" style={{ bottom: '22px' }}>{Math.round(minB * 10) / 10}</span>
 
-          <svg viewBox="0 0 100 40" className="absolute" style={{ left: '28px', right: 0, top: 0, height: 'calc(100% - 20px)' }} preserveAspectRatio="none">
-            {[0, 25, 50, 75, 100].map((y) => (
-              <line key={y} x1="0" x2="100" y1={y * 0.4} y2={y * 0.4} stroke="oklch(0.25 0.01 260)" strokeWidth="0.3" />
-            ))}
-            {[18.5, 25].map((threshold) => threshold >= minB && threshold <= maxB && (
-              <line key={threshold} x1="0" x2="100" y1={yFor(threshold)} y2={yFor(threshold)} stroke="#6b7280" strokeWidth="0.4" strokeDasharray="2,2" />
-            ))}
-            <polygon
-              points={`0,40 ${entries.map((e, i) => `${(i / Math.max(1, entries.length - 1)) * 100},${yFor(e.bmi)}`).join(' ')} 100,40`}
-              fill="rgba(129,140,248,0.1)"
-            />
-            <polyline
-              points={entries.map((e, i) => `${(i / Math.max(1, entries.length - 1)) * 100},${yFor(e.bmi)}`).join(' ')}
-              fill="none" stroke="#818cf8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-            />
-            {entries.map((e, i) => {
-              const x = (i / Math.max(1, entries.length - 1)) * 100
-              return <circle key={i} cx={x} cy={yFor(e.bmi)} r="1.8" fill="#818cf8" />
-            })}
-          </svg>
+          {(() => {
+            const bmiVals = entries.map((e) => e.bmi)
+            const pts = toChartPoints(bmiVals, { width: 100, height: 40, padding: 2.5 })
+            return (
+              <svg viewBox="0 0 100 40" className="absolute" style={{ left: '28px', right: 0, top: 0, height: 'calc(100% - 20px)' }} preserveAspectRatio="none">
+                <defs><ChartGradient id="bmiGrad" color="#818cf8" /></defs>
+                {[0, 50, 100].map((y) => (
+                  <line key={y} x1="0" x2="100" y1={y * 0.4} y2={y * 0.4} stroke="oklch(0.22 0.01 260)" strokeWidth="0.3" />
+                ))}
+                {[18.5, 25].map((threshold) => threshold >= minB && threshold <= maxB && (
+                  <line key={threshold} x1="0" x2="100" y1={yFor(threshold)} y2={yFor(threshold)} stroke="#6b7280" strokeWidth="0.4" strokeDasharray="2,2" />
+                ))}
+                <path d={smoothAreaPath(pts, 40)} fill="url(#bmiGrad)" />
+                <path d={smoothPath(pts)} fill="none" stroke="#818cf8" strokeWidth="1.8" strokeLinecap="round" />
+                {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="2" fill="#818cf8" stroke="#1a1a2e" strokeWidth="0.6" />)}
+              </svg>
+            )
+          })()}
 
           {entries.map((e, i) => {
             const isEdge = i === 0 || i === entries.length - 1

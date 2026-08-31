@@ -38,12 +38,24 @@ export default function ExercisePage({ profile }) {
   }
 
   const handleRemove = (id) => {
+    const removed = exercises.find((e) => e.id === id)
     const updated = { ...dayLog, exercises: exercises.filter((e) => e.id !== id) }
     saveDayLog(dateKey, updated)
     setDayLog(updated)
+    if (undoItem?.timer) clearTimeout(undoItem.timer)
+    const timer = setTimeout(() => setUndoItem(null), 5000)
+    setUndoItem({ entry: removed, timer })
+  }
+
+  const handleUndoRemove = () => {
+    if (!undoItem) return
+    clearTimeout(undoItem.timer)
+    handleAdd(undoItem.entry)
+    setUndoItem(null)
   }
 
   const [editingId, setEditingId] = useState(null)
+  const [undoItem, setUndoItem] = useState(null)
 
   const handleEditExercise = (id, newParams) => {
     // Recalculate proportionally based on param changes
@@ -273,6 +285,12 @@ export default function ExercisePage({ profile }) {
             )}
           </div>
         </div>
+        {undoItem && (
+          <div className="fixed bottom-28 left-1/2 -translate-x-1/2 bg-gray-800 border border-white/10 rounded-xl px-4 py-3 flex items-center gap-3 shadow-xl z-50 animate-scale-in">
+            <p className="text-sm text-gray-300">Removed {undoItem.entry?.exercise?.slice(0, 25)}</p>
+            <button onClick={handleUndoRemove} className="text-sm font-semibold text-emerald-400 hover:text-emerald-300">Undo</button>
+          </div>
+        )}
       </div>
     </div>
   )

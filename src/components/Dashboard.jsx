@@ -52,6 +52,7 @@ export default function Dashboard({ profile, onOpenSettings, initialDate, onBack
   const [showNutrients, setShowNutrients] = useState(false)
   const [expandedEntry, setExpandedEntry] = useState(null)
   const [editingEntry, setEditingEntry] = useState(null) // { meal, logId, servings }
+  const [undoItem, setUndoItem] = useState(null) // { meal, entry, timer }
   const [showSuggest, setShowSuggest] = useState(false)
   const [suggestMode, setSuggestMode] = useState('suggest') // 'suggest' | 'scan' | 'plan'
   const [suggestContext, setSuggestContext] = useState('')
@@ -85,9 +86,9 @@ export default function Dashboard({ profile, onOpenSettings, initialDate, onBack
     setDayLog(getDayLog(dateKey))
   }, [dateKey])
 
-  const allEntries = MEAL_TYPES.flatMap((m) => dayLog.meals[m] || [])
-  const totals = sumNutrients(allEntries)
-  const totalBurned = (dayLog.exercises || []).reduce((sum, e) => sum + (e.caloriesBurned || 0), 0)
+  const allEntries = useMemo(() => MEAL_TYPES.flatMap((m) => dayLog.meals[m] || []), [dayLog])
+  const totals = useMemo(() => sumNutrients(allEntries), [allEntries])
+  const totalBurned = useMemo(() => (dayLog.exercises || []).reduce((sum, e) => sum + (e.caloriesBurned || 0), 0), [dayLog])
 
   const navigateDay = (offset) => {
     const d = new Date(dateKey + 'T12:00:00')
@@ -108,11 +109,21 @@ export default function Dashboard({ profile, onOpenSettings, initialDate, onBack
   }
 
   const handleRemoveFood = (mealType, logId) => {
-    const updated = { ...dayLog }
-    updated.meals = { ...updated.meals }
+    const entry = (dayLog.meals[mealType] || []).find((e) => e.logId === logId)
+    const updated = { ...dayLog, meals: { ...dayLog.meals } }
     updated.meals[mealType] = updated.meals[mealType].filter((e) => e.logId !== logId)
     saveDayLog(dateKey, updated)
     setDayLog(updated)
+    if (undoItem?.timer) clearTimeout(undoItem.timer)
+    const timer = setTimeout(() => setUndoItem(null), 5000)
+    setUndoItem({ meal: mealType, entry, timer })
+  }
+
+  const handleUndo = () => {
+    if (!undoItem) return
+    clearTimeout(undoItem.timer)
+    handleAddFood(undoItem.meal, undoItem.entry)
+    setUndoItem(null)
   }
 
 
@@ -762,6 +773,13 @@ export default function Dashboard({ profile, onOpenSettings, initialDate, onBack
         })}
 
 
+        {/* Undo toast */}
+        {undoItem && (
+          <div className="fixed bottom-28 left-1/2 -translate-x-1/2 bg-gray-800 border border-white/10 rounded-xl px-4 py-3 flex items-center gap-3 shadow-xl z-50 animate-scale-in">
+            <p className="text-sm text-gray-300">Removed {undoItem.entry?.name?.slice(0, 25)}</p>
+            <button onClick={handleUndo} className="text-sm font-semibold text-indigo-400 hover:text-indigo-300">Undo</button>
+          </div>
+        )}
       </div>
     </div>
   )

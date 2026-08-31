@@ -25,6 +25,15 @@ const SEARCH_CHAIN = [
   { provider: 'gemini', model: 'gemini-3.5-flash-lite' },
 ]
 
+// --- Timeout wrapper ---
+const API_TIMEOUT = 30000
+function withTimeout(promise, ms = API_TIMEOUT) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error('Request timed out — try again'), { isRateLimit: true })), ms)),
+  ])
+}
+
 // --- Gemini ---
 async function callGemini(apiKey, model, prompt, imageBase64 = null, images = null) {
   const parts = [{ text: prompt }]
@@ -35,7 +44,7 @@ async function callGemini(apiKey, model, prompt, imageBase64 = null, images = nu
   }
 
   const url = `${GEMINI_API_URL}/${model}:generateContent?key=${apiKey}`
-  const res = await fetch(url, {
+  const res = await withTimeout(fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -45,7 +54,7 @@ async function callGemini(apiKey, model, prompt, imageBase64 = null, images = nu
         responseMimeType: 'application/json',
       },
     }),
-  })
+  }))
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
@@ -62,7 +71,7 @@ async function callGemini(apiKey, model, prompt, imageBase64 = null, images = nu
 // --- Gemini with Google Search grounding ---
 async function callGeminiSearch(apiKey, model, prompt) {
   const url = `${GEMINI_API_URL}/${model}:generateContent?key=${apiKey}`
-  const res = await fetch(url, {
+  const res = await withTimeout(fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -70,7 +79,7 @@ async function callGeminiSearch(apiKey, model, prompt) {
       tools: [{ google_search: {} }],
       generationConfig: { temperature: 0.1 },
     }),
-  })
+  }))
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
@@ -86,7 +95,7 @@ async function callGeminiSearch(apiKey, model, prompt) {
 
 // --- Groq (compound models with built-in web search) ---
 async function callGroqSearch(apiKey, model, messages) {
-  const res = await fetch(GROQ_API_URL, {
+  const res = await withTimeout(fetch(GROQ_API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -98,7 +107,7 @@ async function callGroqSearch(apiKey, model, messages) {
       temperature: 0.1,
       max_tokens: 8192,
     }),
-  })
+  }))
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
@@ -122,7 +131,7 @@ async function callGroq(apiKey, model, messages) {
     ...messages,
   ]
 
-  const res = await fetch(GROQ_API_URL, {
+  const res = await withTimeout(fetch(GROQ_API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -134,7 +143,7 @@ async function callGroq(apiKey, model, messages) {
       temperature: 0.1,
       max_tokens: 8192,
     }),
-  })
+  }))
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))

@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { getDateKey } from '../utils/calculations'
 import { getDayLog, getExerciseHistory } from '../utils/storage'
+import { smoothPath, smoothAreaPath, toChartPoints, ChartGradient } from '../utils/chart'
 
 const MUSCLE_GROUPS = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core']
 const MUSCLE_COLORS = {
@@ -149,76 +150,61 @@ export function ExerciseDetail({ exerciseName, onBack }) {
         <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">
           {hasWeight ? 'Weight Progression (kg)' : 'Calories Burned'}
         </p>
-        {hasWeight && <p className="text-[10px] text-gray-600 mb-2">Number above each point is weight lifted, below it is total reps that session</p>}
-        <div className="relative" style={{ height: '150px', paddingLeft: '28px' }}>
-          {/* Y-axis labels */}
-          <span className="absolute left-0 top-0 text-[9px] text-gray-500 tabular-nums">{Math.round(maxV)}{hasWeight ? 'kg' : ''}</span>
-          <span className="absolute left-0 text-[9px] text-gray-500 tabular-nums" style={{ top: 'calc(50% - 6px)' }}>{Math.round(minV + range / 2)}{hasWeight ? 'kg' : ''}</span>
-          <span className="absolute left-0 text-[9px] text-gray-500 tabular-nums" style={{ bottom: '22px' }}>{Math.round(minV)}{hasWeight ? 'kg' : ''}</span>
+        {hasWeight && <p className="text-[10px] text-gray-600 mb-2">Weight per point, reps below</p>}
+        {(() => {
+          const lineColor = isUp ? '#34d399' : '#818cf8'
+          const pts = toChartPoints(values, { width: 100, height: 40, padding: 3 })
+          return (
+            <div className="relative" style={{ height: '160px', paddingLeft: '32px' }}>
+              <span className="absolute left-0 top-0 text-[9px] text-gray-500 tabular-nums">{Math.round(maxV)}{hasWeight ? 'kg' : ''}</span>
+              <span className="absolute left-0 text-[9px] text-gray-500 tabular-nums" style={{ top: 'calc(50% - 6px)' }}>{Math.round(minV + range / 2)}{hasWeight ? 'kg' : ''}</span>
+              <span className="absolute left-0 text-[9px] text-gray-500 tabular-nums" style={{ bottom: '22px' }}>{Math.round(minV)}{hasWeight ? 'kg' : ''}</span>
 
-          <svg viewBox="0 0 100 40" className="absolute inset-0" style={{ left: '28px', right: 0, height: 'calc(100% - 20px)' }} preserveAspectRatio="none">
-            {[0, 25, 50, 75, 100].map((y) => (
-              <line key={y} x1="0" x2="100" y1={y * 0.4} y2={y * 0.4} stroke="oklch(0.25 0.01 260)" strokeWidth="0.3" />
-            ))}
-            <polygon
-              points={`0,40 ${sessions.map((s, i) => {
-                const x = (i / Math.max(1, sessions.length - 1)) * 100
-                const y = 40 - ((values[i] - minV) / range) * 35
-                return `${x},${y}`
-              }).join(' ')} 100,40`}
-              fill={isUp ? 'rgba(52,211,153,0.1)' : 'rgba(107,114,128,0.1)'}
-            />
-            <polyline
-              points={sessions.map((s, i) => {
-                const x = (i / Math.max(1, sessions.length - 1)) * 100
-                const y = 40 - ((values[i] - minV) / range) * 35
-                return `${x},${y}`
-              }).join(' ')}
-              fill="none"
-              stroke={isUp ? '#34d399' : '#6b7280'}
-              strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-            />
-            {sessions.map((s, i) => {
-              const x = (i / Math.max(1, sessions.length - 1)) * 100
-              const y = 40 - ((values[i] - minV) / range) * 35
-              return <circle key={i} cx={x} cy={y} r="2" fill={isUp ? '#34d399' : '#6b7280'} />
-            })}
-          </svg>
+              <svg viewBox="0 0 100 40" className="absolute" style={{ left: '32px', right: 0, top: 0, height: 'calc(100% - 20px)' }} preserveAspectRatio="none">
+                <defs><ChartGradient id="exGrad" color={lineColor} /></defs>
+                {[0, 50, 100].map((y) => (
+                  <line key={y} x1="0" x2="100" y1={y * 0.4} y2={y * 0.4} stroke="oklch(0.22 0.01 260)" strokeWidth="0.3" />
+                ))}
+                <path d={smoothAreaPath(pts, 40)} fill="url(#exGrad)" />
+                <path d={smoothPath(pts)} fill="none" stroke={lineColor} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                {pts.map((p, i) => (
+                  <circle key={i} cx={p.x} cy={p.y} r="2.2" fill={lineColor} stroke="#1a1a2e" strokeWidth="0.8" />
+                ))}
+              </svg>
 
-          {/* Per-point value/reps labels */}
-          {sessions.map((s, i) => {
-            const x = (i / Math.max(1, sessions.length - 1)) * 100
-            const yFrac = (40 - ((values[i] - minV) / range) * 35) / 40
-            const showBelow = yFrac < 0.2
-            return (
-              <div key={i} className="absolute text-center pointer-events-none" style={{
-                left: `calc(28px + (100% - 28px) * ${x / 100})`,
-                top: `calc((100% - 20px) * ${yFrac} ${showBelow ? '+ 6px' : '- 22px'})`,
-                transform: 'translateX(-50%)', width: '44px',
-              }}>
-                <p className="text-[10px] font-semibold text-white leading-tight tabular-nums">
-                  {hasWeight ? `${s.weight}kg` : `${s.caloriesBurned}`}
-                </p>
-                {hasWeight && s.reps > 0 && (
-                  <p className="text-[8px] text-gray-500 leading-tight tabular-nums">{s.reps} reps</p>
-                )}
+              {sessions.map((s, i) => {
+                const x = pts[i].x
+                const yFrac = pts[i].y / 40
+                const showBelow = yFrac < 0.2
+                return (
+                  <div key={i} className="absolute text-center pointer-events-none" style={{
+                    left: `calc(32px + (100% - 32px) * ${x / 100})`,
+                    top: `calc((100% - 20px) * ${yFrac} ${showBelow ? '+ 6px' : '- 22px'})`,
+                    transform: 'translateX(-50%)', width: '48px',
+                  }}>
+                    <p className="text-[10px] font-semibold text-white leading-tight tabular-nums">
+                      {hasWeight ? `${s.weight}kg` : `${s.caloriesBurned}`}
+                    </p>
+                    {hasWeight && s.reps > 0 && (
+                      <p className="text-[8px] text-gray-500 leading-tight tabular-nums">{s.reps} reps</p>
+                    )}
+                  </div>
+                )
+              })}
+
+              <div className="absolute" style={{ left: '32px', right: 0, bottom: 0, height: '18px' }}>
+                {sessions.map((s, i) => {
+                  if (sessions.length > 6 && i !== 0 && i !== sessions.length - 1 && i % Math.ceil(sessions.length / 5) !== 0) return null
+                  return (
+                    <span key={i} className="absolute text-[8px] text-gray-600 whitespace-nowrap" style={{ left: `${pts[i].x}%`, transform: 'translateX(-50%)' }}>
+                      {s.dateLabel}
+                    </span>
+                  )
+                })}
               </div>
-            )
-          })}
-
-          {/* X-axis date labels */}
-          <div className="absolute" style={{ left: '28px', right: 0, bottom: 0, height: '18px' }}>
-            {sessions.map((s, i) => {
-              if (sessions.length > 6 && i !== 0 && i !== sessions.length - 1 && i % Math.ceil(sessions.length / 5) !== 0) return null
-              const x = (i / Math.max(1, sessions.length - 1)) * 100
-              return (
-                <span key={i} className="absolute text-[8px] text-gray-600 whitespace-nowrap" style={{ left: `${x}%`, transform: 'translateX(-50%)' }}>
-                  {s.dateLabel}
-                </span>
-              )
-            })}
-          </div>
-        </div>
+            </div>
+          )
+        })()}
       </div>
 
       {/* Session log */}
@@ -278,24 +264,24 @@ export function WeeklyExerciseChart() {
         </div>
       </div>
 
-      <div className="flex items-end gap-2 h-24">
+      <div className="flex items-end gap-2 h-28">
         {days.map((day) => {
           const burned = day.exercises.reduce((s, e) => s + (e.caloriesBurned || 0), 0)
-          const pct = Math.max(2, (burned / maxBurned) * 100)
+          const pct = Math.max(3, (burned / maxBurned) * 100)
           const hasExercise = burned > 0
 
           return (
             <div key={day.key} className="flex-1 flex flex-col items-center gap-1">
-              <span className={`text-[9px] tabular-nums ${hasExercise ? 'text-gray-400' : 'text-gray-700'}`}>
+              <span className={`text-[9px] tabular-nums font-medium ${hasExercise ? 'text-emerald-300' : 'text-gray-700'}`}>
                 {hasExercise ? burned : ''}
               </span>
               <div className="w-full flex-1 flex items-end">
                 <div
-                  className={`w-full rounded-t-md transition-all duration-500 ${hasExercise ? 'bg-emerald-500/70' : 'bg-gray-800'}`}
-                  style={{ height: `${hasExercise ? pct : 4}%`, minHeight: '4px' }}
+                  className={`w-full rounded-lg transition-all duration-700 ${hasExercise ? 'bg-gradient-to-t from-emerald-600/60 to-emerald-400/40' : 'bg-white/[0.03]'}`}
+                  style={{ height: `${hasExercise ? pct : 3}%`, minHeight: '4px' }}
                 />
               </div>
-              <span className={`text-[10px] ${day.isToday ? 'text-white font-semibold' : 'text-gray-600'}`}>
+              <span className={`text-[10px] ${day.isToday ? 'text-white font-bold' : 'text-gray-600'}`}>
                 {day.label}
               </span>
             </div>
@@ -444,38 +430,23 @@ function MuscleGroupDetail({ group, onBack }) {
 
             {/* Chart */}
             <div className="bg-surface-3 rounded-xl p-3">
-              <svg viewBox="0 0 100 40" className="w-full h-20" preserveAspectRatio="none">
-                {/* Grid lines */}
-                {[0, 25, 50, 75, 100].map((y) => (
-                  <line key={y} x1="0" x2="100" y1={y * 0.4} y2={y * 0.4} stroke="oklch(0.25 0.01 260)" strokeWidth="0.3" />
-                ))}
-                {/* Area fill */}
-                <polygon
-                  points={`0,40 ${chartData.map((s, i) => {
-                    const x = (i / Math.max(1, chartData.length - 1)) * 100
-                    const y = 40 - ((values[i] - minV) / range) * 35
-                    return `${x},${y}`
-                  }).join(' ')} 100,40`}
-                  fill={`${isUp ? 'rgba(52,211,153,0.1)' : 'rgba(107,114,128,0.1)'}`}
-                />
-                {/* Line */}
-                <polyline
-                  points={chartData.map((s, i) => {
-                    const x = (i / Math.max(1, chartData.length - 1)) * 100
-                    const y = 40 - ((values[i] - minV) / range) * 35
-                    return `${x},${y}`
-                  }).join(' ')}
-                  fill="none"
-                  stroke={isUp ? '#34d399' : '#6b7280'}
-                  strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-                />
-                {/* Dots */}
-                {chartData.map((s, i) => {
-                  const x = (i / Math.max(1, chartData.length - 1)) * 100
-                  const y = 40 - ((values[i] - minV) / range) * 35
-                  return <circle key={i} cx={x} cy={y} r="2" fill={isUp ? '#34d399' : '#6b7280'} />
-                })}
-              </svg>
+              {(() => {
+                const clr = isUp ? '#34d399' : '#818cf8'
+                const pts = toChartPoints(values, { width: 100, height: 40, padding: 3 })
+                return (
+                  <svg viewBox="0 0 100 40" className="w-full h-20" preserveAspectRatio="none">
+                    <defs><ChartGradient id={`mg-${name.replace(/\s/g, '')}`} color={clr} /></defs>
+                    {[0, 50, 100].map((y) => (
+                      <line key={y} x1="0" x2="100" y1={y * 0.4} y2={y * 0.4} stroke="oklch(0.22 0.01 260)" strokeWidth="0.3" />
+                    ))}
+                    <path d={smoothAreaPath(pts, 40)} fill={`url(#mg-${name.replace(/\s/g, '')})`} />
+                    <path d={smoothPath(pts)} fill="none" stroke={clr} strokeWidth="1.8" strokeLinecap="round" />
+                    {pts.map((p, i) => (
+                      <circle key={i} cx={p.x} cy={p.y} r="2" fill={clr} stroke="#1a1a2e" strokeWidth="0.6" />
+                    ))}
+                  </svg>
+                )
+              })()}
 
               {/* Session details */}
               <div className="space-y-1.5 mt-2">
@@ -603,11 +574,6 @@ export function ProgressiveOverload() {
           const minW = Math.min(...weights)
           const maxW = Math.max(...weights)
           const range = maxW - minW || 1
-          const points = sessions.map((s, i) => {
-            const x = (i / Math.max(1, sessions.length - 1)) * 100
-            const y = 100 - ((s.weight - minW) / range) * 100
-            return `${x},${y}`
-          }).join(' ')
 
           return (
             <div key={name}>
@@ -618,16 +584,18 @@ export function ProgressiveOverload() {
                 </span>
               </div>
               <div className="flex items-center gap-3">
-                <svg viewBox="0 0 100 30" className="flex-1 h-8" preserveAspectRatio="none">
-                  <polyline points={points} fill="none"
-                    stroke={isUp ? '#34d399' : weightDiff < 0 ? '#f87171' : '#6b7280'}
-                    strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  {sessions.map((s, i) => {
-                    const x = (i / Math.max(1, sessions.length - 1)) * 100
-                    const y = 100 - ((s.weight - minW) / range) * 100
-                    return <circle key={i} cx={x} cy={y} r="2" fill={isUp ? '#34d399' : '#6b7280'} />
-                  })}
-                </svg>
+                {(() => {
+                  const clr = isUp ? '#34d399' : weightDiff < 0 ? '#f87171' : '#818cf8'
+                  const pts = toChartPoints(weights, { width: 100, height: 30, padding: 2 })
+                  return (
+                    <svg viewBox="0 0 100 30" className="flex-1 h-8" preserveAspectRatio="none">
+                      <path d={smoothPath(pts)} fill="none" stroke={clr} strokeWidth="1.8" strokeLinecap="round" />
+                      {pts.map((p, i) => (
+                        <circle key={i} cx={p.x} cy={p.y} r="2" fill={clr} stroke="#1a1a2e" strokeWidth="0.5" />
+                      ))}
+                    </svg>
+                  )
+                })()}
                 <div className="text-right shrink-0">
                   <p className="text-xs text-white tabular-nums">{last.weight}kg</p>
                   <p className="text-[10px] text-gray-500">{sessions.length} sessions</p>

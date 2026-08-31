@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Component } from 'react'
 import { getProfile, saveProfile, migrateExercisesToLibrary } from './utils/storage'
 import { calculateBMR, calculateBaseline, calculateDailyTargets, calculateDeficit, getDateKey } from './utils/calculations'
 import Onboarding from './components/Onboarding'
@@ -135,4 +135,26 @@ function App() {
   )
 }
 
-export default App
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(error) { return { error } }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen bg-surface-1 flex items-center justify-center p-6">
+          <div className="max-w-sm text-center space-y-4">
+            <p className="text-red-400 text-lg font-semibold">Something went wrong</p>
+            <p className="text-gray-500 text-sm">{this.state.error.message}</p>
+            <button onClick={() => { this.setState({ error: null }); window.location.reload() }}
+              className="px-6 py-3 rounded-xl bg-brand-500 text-white font-medium">Reload App</button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+export default function WrappedApp() {
+  return <ErrorBoundary><App /></ErrorBoundary>
+}

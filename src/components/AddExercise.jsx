@@ -263,16 +263,16 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
     const isStrength = (selectedExercise.fields || []).some((f) => f.key === 'weight' || f.key === 'sets' || f.key === 'reps')
 
     // For strength with multi-sets, validate we have at least one set OR field values
+    let setsToUse = multiSets
     if (isStrength && multiSets.length === 0) {
-      // Validate current fields as a single set
       const w = fieldValues.weight
       const r = fieldValues.reps
       if (!w || !r) {
         setError('Enter weight and reps, or add sets first')
         return
       }
-      // Auto-add as single set
-      multiSets.push({ weight: w, reps: r })
+      setsToUse = [{ weight: w, reps: r }]
+      setMultiSets(setsToUse)
     }
 
     // For non-strength, validate required fields
@@ -293,19 +293,19 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
       let params = {}
       let summary = ''
 
-      if (isStrength && multiSets.length > 0) {
+      if (isStrength && setsToUse.length > 0) {
         // Build params from multi-sets
-        const totalSets = multiSets.length
-        const totalReps = multiSets.reduce((s, set) => s + (parseInt(set.reps) || 0), 0)
-        const avgWeight = multiSets.reduce((s, set) => s + (parseFloat(set.weight) || 0), 0) / totalSets
-        const maxWeight = Math.max(...multiSets.map((set) => parseFloat(set.weight) || 0))
+        const totalSets = setsToUse.length
+        const totalReps = setsToUse.reduce((s, set) => s + (parseInt(set.reps) || 0), 0)
+        const avgWeight = setsToUse.reduce((s, set) => s + (parseFloat(set.weight) || 0), 0) / totalSets
+        const maxWeight = Math.max(...setsToUse.map((set) => parseFloat(set.weight) || 0))
         params = {
           sets: totalSets,
           reps: Math.round(totalReps / totalSets),
           weight: Math.round(avgWeight * 10) / 10,
-          totalVolume: multiSets.reduce((s, set) => s + (parseFloat(set.weight) || 0) * (parseInt(set.reps) || 0), 0),
+          totalVolume: setsToUse.reduce((s, set) => s + (parseFloat(set.weight) || 0) * (parseInt(set.reps) || 0), 0),
         }
-        summary = multiSets.map((set, i) => `${set.reps}x${set.weight}kg`).join(', ')
+        summary = setsToUse.map((set) => `${set.reps}x${set.weight}kg`).join(', ')
       } else {
         ;(selectedExercise.fields || []).forEach((f) => {
           const val = fieldValues[f.key]
@@ -326,7 +326,7 @@ export default function AddExercise({ keys, weightKg, heightCm, onAdd, onClose }
         type: selectedGroup?.group?.toLowerCase() || 'strength',
         muscleGroups: [selectedGroup?.group].filter(Boolean),
         params,
-        sets: multiSets.length > 0 ? [...multiSets] : null,
+        sets: setsToUse.length > 0 ? [...setsToUse] : null,
         fields: selectedExercise.fields,
         summary: summary || result.summary || '',
         durationMin: params.duration || (params.sets ? Math.round((params.sets || 1) * (params.reps || 10) * 0.1) : 0),

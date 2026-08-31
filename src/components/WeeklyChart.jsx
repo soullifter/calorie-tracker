@@ -33,39 +33,35 @@ export default function WeeklyChart({ target }) {
         <span className="text-xs text-gray-500">Target: {target} cal</span>
       </div>
 
-      <div className="flex items-end gap-2 h-36">
+      <div className="flex items-end gap-2 h-40">
         {days.map((day) => {
-          const pct = Math.max(2, (day.calories / maxVal) * 100)
+          const pct = Math.max(3, (day.calories / maxVal) * 100)
+          const targetPct = (target / maxVal) * 100
           const overTarget = day.calories > target
           const hasData = day.calories > 0
 
           return (
             <div key={day.key} className="flex-1 flex flex-col items-center gap-1">
-              {/* Calorie label */}
-              <span className={`text-[9px] tabular-nums ${hasData ? 'text-gray-400' : 'text-gray-700'}`}>
+              <span className={`text-[9px] tabular-nums font-medium ${hasData ? (overTarget ? 'text-red-400' : 'text-gray-300') : 'text-gray-700'}`}>
                 {hasData ? day.calories : ''}
               </span>
 
-              {/* Bar */}
-              <div className="w-full flex-1 flex items-end">
-                <div className="w-full relative">
-                  {/* Target line */}
-                  <div
-                    className="absolute w-full border-t border-dashed border-gray-700"
-                    style={{ bottom: `${(target / maxVal) * 100}%` }}
-                  />
-                  <div
-                    className={`w-full rounded-t-md transition-all duration-500 ${
-                      !hasData ? 'bg-gray-800' :
-                      overTarget ? 'bg-red-500/70' : 'bg-indigo-500/70'
-                    }`}
-                    style={{ height: `${pct}%`, minHeight: '4px' }}
-                  />
-                </div>
+              <div className="w-full flex-1 flex items-end relative">
+                {/* Target marker */}
+                <div
+                  className="absolute w-full border-t border-dashed border-gray-600/50"
+                  style={{ bottom: `${targetPct}%` }}
+                />
+                <div
+                  className={`w-full rounded-lg transition-all duration-700 ${
+                    !hasData ? 'bg-white/[0.03]' :
+                    overTarget ? 'bg-gradient-to-t from-red-600/60 to-red-400/40' : 'bg-gradient-to-t from-indigo-600/60 to-indigo-400/40'
+                  }`}
+                  style={{ height: `${hasData ? pct : 3}%`, minHeight: '4px' }}
+                />
               </div>
 
-              {/* Day label */}
-              <span className={`text-[10px] ${day.isToday ? 'text-white font-semibold' : 'text-gray-600'}`}>
+              <span className={`text-[10px] ${day.isToday ? 'text-white font-bold' : 'text-gray-600'}`}>
                 {day.label}
               </span>
             </div>
@@ -73,15 +69,14 @@ export default function WeeklyChart({ target }) {
         })}
       </div>
 
-      {/* Legend */}
       <div className="flex items-center gap-4 mt-3 justify-center">
         <div className="flex items-center gap-1.5">
-          <div className="w-2 h-2 rounded-full bg-indigo-500/70" />
-          <span className="text-[10px] text-gray-500">Under target</span>
+          <div className="w-2.5 h-2.5 rounded-sm bg-gradient-to-t from-indigo-600/60 to-indigo-400/40" />
+          <span className="text-[10px] text-gray-500">Under</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-2 h-2 rounded-full bg-red-500/70" />
-          <span className="text-[10px] text-gray-500">Over target</span>
+          <div className="w-2.5 h-2.5 rounded-sm bg-gradient-to-t from-red-600/60 to-red-400/40" />
+          <span className="text-[10px] text-gray-500">Over</span>
         </div>
       </div>
     </div>

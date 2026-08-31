@@ -140,8 +140,16 @@ export default function Onboarding({ onComplete }) {
   ]
 
   const canNext = () => {
-    if (step === 0) return form.name && form.age && form.heightCm
-    if (step === 1) return form.weightKg && form.targetWeightKg
+    if (step === 0) {
+      const age = parseInt(form.age)
+      const height = parseFloat(form.heightCm)
+      return form.name && age >= 13 && age <= 120 && height >= 100 && height <= 300
+    }
+    if (step === 1) {
+      const w = parseFloat(form.weightKg)
+      const tw = parseFloat(form.targetWeightKg)
+      return w > 20 && w <= 500 && tw > 20 && tw <= 500
+    }
     if (step === 2) return form.geminiApiKey
     return false
   }
