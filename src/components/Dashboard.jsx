@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { MEAL_LABELS, MEAL_TYPES, NUTRIENTS, getDailyRDA } from '../utils/constants'
 import { getDateKey, sumNutrients } from '../utils/calculations'
 import { getDayLog, saveDayLog, getFoodLibrary } from '../utils/storage'
-import { suggestMeals, suggestFromMenuPhoto } from '../utils/ai'
+import { suggestMeals, suggestFromPhotos, suggestFullDayPlan } from '../utils/ai'
 import CalorieRing from './CalorieRing'
 import MacroBar from './MacroBar'
 import NutrientDetails from './NutrientDetails'
@@ -53,11 +53,16 @@ export default function Dashboard({ profile, onOpenSettings, initialDate, onBack
   const [expandedEntry, setExpandedEntry] = useState(null)
   const [editingEntry, setEditingEntry] = useState(null) // { meal, logId, servings }
   const [showSuggest, setShowSuggest] = useState(false)
+  const [suggestMode, setSuggestMode] = useState('suggest') // 'suggest' | 'scan' | 'plan'
   const [suggestContext, setSuggestContext] = useState('')
   const [suggestions, setSuggestions] = useState(null)
+  const [dayPlan, setDayPlan] = useState(null)
   const [suggestLoading, setSuggestLoading] = useState(false)
   const [suggestError, setSuggestError] = useState('')
   const [suggestAddedMeal, setSuggestAddedMeal] = useState('snacks')
+  const [scanType, setScanType] = useState('menu') // 'menu' | 'fridge'
+  const [scanPhotos, setScanPhotos] = useState([]) // base64 array
+  const [filters, setFilters] = useState({ quick: false, budget: false, vegetarian: false, highProtein: false, lowCarb: false })
 
   const handleEditFood = (meal, logId, newServings) => {
     const updated = { ...dayLog, meals: { ...dayLog.meals } }
@@ -111,63 +116,6 @@ export default function Dashboard({ profile, onOpenSettings, initialDate, onBack
   }
 
 
-  const handleGetSuggestions = async () => {
-    setSuggestLoading(true)
-    setSuggestError('')
-    try {
-      const rda = getDailyRDA(profile.gender, profile.targets.calories)
-      const targets = { calories: profile.targets.calories, protein: profile.targets.protein, carbs: profile.targets.carbs, fat: profile.targets.fat, ...rda }
-
-      const remaining = {}
-      const gaps = []
-      for (const n of NUTRIENTS) {
-        const target = targets[n.key]
-        if (!target) continue
-        const consumed = totals[n.key] || 0
-        const left = Math.max(0, Math.round((target - consumed) * 10) / 10)
-        remaining[n.key] = left
-        if (left > 0) {
-          const pct = Math.round((left / target) * 100)
-          gaps.push({ key: n.key, label: n.label, remaining: left, unit: n.unit, pct })
-        }
-      }
-      gaps.sort((a, b) => b.pct - a.pct)
-
-      const lib = getFoodLibrary().map((f) => ({
-        name: f.name,
-        calories: Math.round(f.nutrients?.calories || 0),
-        protein: Math.round(f.nutrients?.protein || 0),
-        carbs: Math.round(f.nutrients?.carbs || 0),
-        fat: Math.round(f.nutrients?.fat || 0),
-        serving: f.servingSize || '1 serving',
-      }))
-
-      const keys = { geminiKey: profile.geminiApiKey, groqKey: profile.groqApiKey }
-      const result = await suggestMeals(keys, { remaining, gaps, foodLibrary: lib, context: suggestContext.trim() })
-      setSuggestions(result)
-    } catch (err) {
-      setSuggestError(err.message || 'Failed to get suggestions')
-    } finally {
-      setSuggestLoading(false)
-    }
-  }
-
-  const handleAddSuggestion = (item) => {
-    const entry = {
-      logId: `log_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      name: `${item.name} (${item.quantity})`,
-      servingSize: item.quantity,
-      servingWeightG: item.servingWeightG || null,
-      servingUnit: 'serving',
-      servingUnitAmount: 1,
-      servings: 1,
-      nutrients: item.nutrients || {},
-      source: 'ai-suggestion',
-      loggedAt: Date.now(),
-    }
-    handleAddFood(suggestAddedMeal, entry)
-  }
-
   const compressImage = (file, maxDim = 768, quality = 0.6) =>
     new Promise((resolve) => {
       const img = new Image()
@@ -188,37 +136,110 @@ export default function Dashboard({ profile, onOpenSettings, initialDate, onBack
       img.src = URL.createObjectURL(file)
     })
 
-  const handleMenuPhoto = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const computeGaps = () => {
+    const rda = getDailyRDA(profile.gender, profile.targets.calories)
+    const targets = { calories: profile.targets.calories, protein: profile.targets.protein, carbs: profile.targets.carbs, fat: profile.targets.fat, ...rda }
+    const remaining = {}
+    const gaps = []
+    for (const n of NUTRIENTS) {
+      const target = targets[n.key]
+      if (!target) continue
+      const consumed = totals[n.key] || 0
+      const left = Math.max(0, Math.round((target - consumed) * 10) / 10)
+      remaining[n.key] = left
+      if (left > 0) gaps.push({ key: n.key, label: n.label, remaining: left, unit: n.unit, pct: Math.round((left / target) * 100) })
+    }
+    gaps.sort((a, b) => b.pct - a.pct)
+    return { remaining, gaps }
+  }
+
+  const getFoodLib = () => getFoodLibrary().map((f) => ({
+    name: f.name,
+    calories: Math.round(f.nutrients?.calories || 0),
+    protein: Math.round(f.nutrients?.protein || 0),
+    carbs: Math.round(f.nutrients?.carbs || 0),
+    fat: Math.round(f.nutrients?.fat || 0),
+    serving: f.servingSize || '1 serving',
+  }))
+
+  const apiKeys = { geminiKey: profile.geminiApiKey, groqKey: profile.groqApiKey }
+
+  const handleGetSuggestions = async () => {
     setSuggestLoading(true)
     setSuggestError('')
     try {
-      const base64 = await compressImage(file)
-
-      const rda = getDailyRDA(profile.gender, profile.targets.calories)
-      const targets = { calories: profile.targets.calories, protein: profile.targets.protein, carbs: profile.targets.carbs, fat: profile.targets.fat, ...rda }
-      const remaining = {}
-      const gaps = []
-      for (const n of NUTRIENTS) {
-        const target = targets[n.key]
-        if (!target) continue
-        const consumed = totals[n.key] || 0
-        const left = Math.max(0, Math.round((target - consumed) * 10) / 10)
-        remaining[n.key] = left
-        if (left > 0) gaps.push({ key: n.key, label: n.label, remaining: left, unit: n.unit, pct: Math.round((left / target) * 100) })
-      }
-      gaps.sort((a, b) => b.pct - a.pct)
-
-      const keys = { geminiKey: profile.geminiApiKey, groqKey: profile.groqApiKey }
-      const result = await suggestFromMenuPhoto(keys, base64, { remaining, gaps })
+      const { remaining, gaps } = computeGaps()
+      const result = await suggestMeals(apiKeys, { remaining, gaps, foodLibrary: getFoodLib(), context: suggestContext.trim(), filters })
       setSuggestions(result)
+      setDayPlan(null)
     } catch (err) {
-      setSuggestError(err.message || 'Failed to read menu')
+      setSuggestError(err.message || 'Failed to get suggestions')
     } finally {
       setSuggestLoading(false)
     }
   }
+
+  const handleScanSubmit = async () => {
+    if (scanPhotos.length === 0) return
+    setSuggestLoading(true)
+    setSuggestError('')
+    try {
+      const { remaining, gaps } = computeGaps()
+      const result = await suggestFromPhotos(apiKeys, scanPhotos, scanType, { remaining, gaps })
+      setSuggestions(result)
+      setDayPlan(null)
+    } catch (err) {
+      setSuggestError(err.message || 'Failed to analyze photos')
+    } finally {
+      setSuggestLoading(false)
+    }
+  }
+
+  const handleScanCapture = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const base64 = await compressImage(file)
+    setScanPhotos((prev) => [...prev, base64])
+    e.target.value = ''
+  }
+
+  const handlePlanDay = async () => {
+    setSuggestLoading(true)
+    setSuggestError('')
+    try {
+      const { remaining, gaps } = computeGaps()
+      const mealsLeft = MEAL_TYPES.filter((m) => (dayLog.meals[m] || []).length === 0)
+      if (mealsLeft.length === 0) {
+        setSuggestError('All meals already have entries. Clear a meal to re-plan.')
+        return
+      }
+      const result = await suggestFullDayPlan(apiKeys, { remaining, gaps, foodLibrary: getFoodLib(), mealsLeft, filters })
+      setDayPlan(result)
+      setSuggestions(null)
+    } catch (err) {
+      setSuggestError(err.message || 'Failed to plan')
+    } finally {
+      setSuggestLoading(false)
+    }
+  }
+
+  const handleAddSuggestion = (item, mealOverride) => {
+    const entry = {
+      logId: `log_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      name: `${item.name} (${item.quantity})`,
+      servingSize: item.quantity,
+      servingWeightG: item.servingWeightG || null,
+      servingUnit: 'serving',
+      servingUnitAmount: 1,
+      servings: 1,
+      nutrients: item.nutrients || {},
+      source: 'ai-suggestion',
+      loggedAt: Date.now(),
+    }
+    handleAddFood(mealOverride || suggestAddedMeal, entry)
+  }
+
+  const toggleFilter = (key) => setFilters((prev) => ({ ...prev, [key]: !prev[key] }))
 
   const isToday = dateKey === getDateKey()
   const displayDate = new Date(dateKey + 'T12:00:00')
@@ -307,7 +328,7 @@ export default function Dashboard({ profile, onOpenSettings, initialDate, onBack
         {isToday && (
           <div className="bg-surface-2 rounded-2xl overflow-hidden animate-fade-in">
             <button
-              onClick={() => { setShowSuggest(!showSuggest); setSuggestions(null); setSuggestError('') }}
+              onClick={() => { setShowSuggest(!showSuggest); setSuggestions(null); setDayPlan(null); setSuggestError(''); setScanPhotos([]) }}
               className="w-full px-5 py-4 flex items-center justify-between hover:bg-surface-3/30 transition"
             >
               <div className="flex items-center gap-3">
@@ -336,50 +357,161 @@ export default function Dashboard({ profile, onOpenSettings, initialDate, onBack
                   ))}
                 </div>
 
-                {/* Context input */}
-                <div>
-                  <input
-                    type="text"
-                    value={suggestContext}
-                    onChange={(e) => setSuggestContext(e.target.value)}
-                    placeholder="Restaurant, cuisine, Google Maps link, or leave empty..."
-                    className="w-full p-3 rounded-xl bg-surface-3 text-white text-sm placeholder-gray-600 border border-white/5 focus:outline-none focus:border-indigo-500/50"
-                  />
+                {/* Mode tabs */}
+                <div className="flex rounded-xl overflow-hidden border border-white/5">
+                  {[
+                    { key: 'suggest', label: 'Suggest' },
+                    { key: 'scan', label: 'Scan' },
+                    { key: 'plan', label: 'Plan Day' },
+                  ].map((tab) => (
+                    <button
+                      key={tab.key}
+                      onClick={() => { setSuggestMode(tab.key); setSuggestions(null); setDayPlan(null); setSuggestError('') }}
+                      className={`flex-1 py-2 text-xs font-medium transition ${suggestMode === tab.key ? 'bg-indigo-600 text-white' : 'bg-surface-3 text-gray-500 hover:text-gray-300'}`}
+                    >{tab.label}</button>
+                  ))}
                 </div>
 
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleGetSuggestions}
-                    disabled={suggestLoading}
-                    className="flex-1 py-3 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-500 transition disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {suggestLoading ? (
-                      <>
-                        <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="30 70" strokeLinecap="round" /></svg>
-                        Analyzing...
-                      </>
-                    ) : 'Get Suggestions'}
-                  </button>
-                  <label className={`py-3 px-4 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-500 transition flex items-center justify-center gap-1.5 cursor-pointer ${suggestLoading ? 'opacity-50 pointer-events-none' : ''}`}>
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                    Scan Menu
-                    <input type="file" accept="image/*" capture="environment" onChange={handleMenuPhoto} className="hidden" />
-                  </label>
+                {/* Filter chips — shared across all modes */}
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { key: 'quick', label: 'Quick' },
+                    { key: 'budget', label: 'Budget' },
+                    { key: 'vegetarian', label: 'Veg' },
+                    { key: 'highProtein', label: 'Hi-Protein' },
+                    { key: 'lowCarb', label: 'Lo-Carb' },
+                  ].map((f) => (
+                    <button
+                      key={f.key}
+                      onClick={() => toggleFilter(f.key)}
+                      className={`text-[10px] px-2.5 py-1 rounded-full border transition ${filters[f.key] ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300' : 'border-white/10 text-gray-500 hover:text-gray-300'}`}
+                    >{f.label}</button>
+                  ))}
                 </div>
+
+                {/* === SUGGEST MODE === */}
+                {suggestMode === 'suggest' && (
+                  <div className="space-y-3">
+                    <input
+                      type="text"
+                      value={suggestContext}
+                      onChange={(e) => setSuggestContext(e.target.value)}
+                      placeholder="Restaurant, craving, ingredients, or leave empty..."
+                      className="w-full p-3 rounded-xl bg-surface-3 text-white text-sm placeholder-gray-600 border border-white/5 focus:outline-none focus:border-indigo-500/50"
+                    />
+                    <p className="text-[10px] text-gray-600 -mt-1 px-1">
+                      Try: "Chipotle" / "I want pizza" / "chicken, rice, eggs" / Google Maps link
+                    </p>
+                    <button
+                      onClick={handleGetSuggestions}
+                      disabled={suggestLoading}
+                      className="w-full py-3 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-500 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {suggestLoading ? (
+                        <>
+                          <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="30 70" strokeLinecap="round" /></svg>
+                          Analyzing your gaps...
+                        </>
+                      ) : 'Get Suggestions'}
+                    </button>
+                  </div>
+                )}
+
+                {/* === SCAN MODE === */}
+                {suggestMode === 'scan' && (
+                  <div className="space-y-3">
+                    {/* Menu vs Fridge toggle */}
+                    <div className="flex rounded-xl overflow-hidden border border-white/5">
+                      <button
+                        onClick={() => { setScanType('menu'); setScanPhotos([]) }}
+                        className={`flex-1 py-2 text-xs font-medium transition ${scanType === 'menu' ? 'bg-emerald-600 text-white' : 'bg-surface-3 text-gray-500'}`}
+                      >Menu / Buffet</button>
+                      <button
+                        onClick={() => { setScanType('fridge'); setScanPhotos([]) }}
+                        className={`flex-1 py-2 text-xs font-medium transition ${scanType === 'fridge' ? 'bg-emerald-600 text-white' : 'bg-surface-3 text-gray-500'}`}
+                      >Fridge / Pantry</button>
+                    </div>
+
+                    <p className="text-[10px] text-gray-600 px-1">
+                      {scanType === 'menu'
+                        ? 'Snap photos of menu pages or buffet stations. Add multiple for full coverage.'
+                        : 'Photograph your fridge, pantry, or available ingredients.'}
+                    </p>
+
+                    {/* Photo thumbnails */}
+                    {scanPhotos.length > 0 && (
+                      <div className="flex gap-2 overflow-x-auto pb-1">
+                        {scanPhotos.map((photo, i) => (
+                          <div key={i} className="relative shrink-0">
+                            <img src={`data:image/jpeg;base64,${photo}`} className="w-16 h-16 rounded-lg object-cover" />
+                            <button
+                              onClick={() => setScanPhotos((prev) => prev.filter((_, j) => j !== i))}
+                              className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[8px] flex items-center justify-center"
+                            >&times;</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <label className="flex-1 py-3 rounded-xl bg-surface-3 border border-dashed border-white/10 text-gray-400 text-sm font-medium hover:border-white/30 hover:text-gray-200 transition flex items-center justify-center gap-2 cursor-pointer">
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                        {scanPhotos.length > 0 ? 'Add More' : 'Take Photo'}
+                        <input type="file" accept="image/*" capture="environment" onChange={handleScanCapture} className="hidden" />
+                      </label>
+                      {scanPhotos.length > 0 && (
+                        <button
+                          onClick={handleScanSubmit}
+                          disabled={suggestLoading}
+                          className="flex-1 py-3 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-500 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                          {suggestLoading ? (
+                            <>
+                              <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="30 70" strokeLinecap="round" /></svg>
+                              Reading {scanPhotos.length} photo{scanPhotos.length > 1 ? 's' : ''}...
+                            </>
+                          ) : `Analyze ${scanPhotos.length} Photo${scanPhotos.length > 1 ? 's' : ''}`}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* === PLAN DAY MODE === */}
+                {suggestMode === 'plan' && (
+                  <div className="space-y-3">
+                    <p className="text-xs text-gray-400">
+                      Plan all remaining meals to optimally hit your daily targets.
+                      {(() => {
+                        const left = MEAL_TYPES.filter((m) => (dayLog.meals[m] || []).length === 0)
+                        return left.length > 0
+                          ? ` Will plan: ${left.map((m) => MEAL_LABELS[m]).join(', ')}.`
+                          : ' All meals have entries already.'
+                      })()}
+                    </p>
+                    <button
+                      onClick={handlePlanDay}
+                      disabled={suggestLoading}
+                      className="w-full py-3 rounded-xl bg-purple-600 text-white text-sm font-medium hover:bg-purple-500 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {suggestLoading ? (
+                        <>
+                          <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="30 70" strokeLinecap="round" /></svg>
+                          Planning your day...
+                        </>
+                      ) : 'Plan Remaining Meals'}
+                    </button>
+                  </div>
+                )}
 
                 {suggestError && <p className="text-red-400 text-xs">{suggestError}</p>}
 
-                {/* Results */}
+                {/* === SUGGESTION RESULTS (suggest + scan modes) === */}
                 {suggestions && (
                   <div className="space-y-3">
-                    {suggestions.menuName && (
-                      <p className="text-xs text-white font-medium">{suggestions.menuName}</p>
-                    )}
-                    {suggestions.summary && (
-                      <p className="text-xs text-gray-400 italic">{suggestions.summary}</p>
-                    )}
+                    {suggestions.menuName && <p className="text-xs text-white font-medium">{suggestions.menuName}</p>}
+                    {suggestions.summary && <p className="text-xs text-gray-400 italic">{suggestions.summary}</p>}
 
-                    {/* Meal selector */}
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] text-gray-500 uppercase">Add to:</span>
                       {MEAL_TYPES.map((m) => (
@@ -413,6 +545,42 @@ export default function Dashboard({ profile, onOpenSettings, initialDate, onBack
                         >
                           Add to {MEAL_LABELS[suggestAddedMeal]}
                         </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* === DAY PLAN RESULTS === */}
+                {dayPlan && (
+                  <div className="space-y-3">
+                    {dayPlan.summary && <p className="text-xs text-gray-400 italic">{dayPlan.summary}</p>}
+
+                    {Object.entries(dayPlan.meals || {}).map(([meal, items]) => (
+                      <div key={meal} className="space-y-2">
+                        <p className="text-xs font-semibold text-white uppercase tracking-wider">{MEAL_LABELS[meal] || meal}</p>
+                        {(items || []).map((item, i) => (
+                          <div key={i} className="bg-surface-3 rounded-xl p-4 space-y-2">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <p className="text-white text-sm font-medium">{item.name}</p>
+                                <p className="text-xs text-gray-500">{item.quantity}</p>
+                              </div>
+                              <span className="text-sm font-semibold text-white tabular-nums shrink-0">{Math.round(item.nutrients?.calories || 0)} cal</span>
+                            </div>
+                            <div className="flex gap-3 text-xs">
+                              <span className="text-blue-400">P: {Math.round(item.nutrients?.protein || 0)}g</span>
+                              <span className="text-amber-400">C: {Math.round(item.nutrients?.carbs || 0)}g</span>
+                              <span className="text-orange-400">F: {Math.round(item.nutrients?.fat || 0)}g</span>
+                            </div>
+                            {item.reasoning && <p className="text-[11px] text-gray-500">{item.reasoning}</p>}
+                            <button
+                              onClick={() => handleAddSuggestion(item, meal)}
+                              className="w-full py-2 rounded-lg bg-purple-500/15 text-purple-300 text-xs font-medium hover:bg-purple-500/25 transition"
+                            >
+                              Add to {MEAL_LABELS[meal] || meal}
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     ))}
                   </div>

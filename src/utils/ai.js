@@ -26,9 +26,11 @@ const SEARCH_CHAIN = [
 ]
 
 // --- Gemini ---
-async function callGemini(apiKey, model, prompt, imageBase64 = null) {
+async function callGemini(apiKey, model, prompt, imageBase64 = null, images = null) {
   const parts = [{ text: prompt }]
-  if (imageBase64) {
+  if (images && images.length > 0) {
+    for (const img of images) parts.push({ inline_data: { mime_type: 'image/jpeg', data: img } })
+  } else if (imageBase64) {
     parts.push({ inline_data: { mime_type: 'image/jpeg', data: imageBase64 } })
   }
 
@@ -181,7 +183,7 @@ async function runWithFallback(chain, keys, buildRequest) {
       } else if (provider === 'groq-search') {
         return await callGroqSearch(apiKey, model, req.messages)
       } else if (provider === 'gemini') {
-        return await callGemini(apiKey, model, req.prompt, req.imageBase64)
+        return await callGemini(apiKey, model, req.prompt, req.imageBase64, req.images)
       } else {
         return await callGroq(apiKey, model, req.messages)
       }
@@ -330,7 +332,7 @@ Use targetWeight/targetSets/targetReps for strength exercises, targetDurationMin
   })
 }
 
-export async function suggestMeals(keys, { remaining, gaps, foodLibrary, context }) {
+export async function suggestMeals(keys, { remaining, gaps, foodLibrary, context, filters }) {
   const gapLines = gaps.slice(0, 10).map((g) =>
     `${g.label}: need ${g.remaining}${g.unit} more (${g.pct}% of daily target still missing)`
   ).join('\n')
@@ -344,11 +346,24 @@ export async function suggestMeals(keys, { remaining, gaps, foodLibrary, context
       ).join('\n')
     : ''
 
+  const filterLines = []
+  if (filters?.quick) filterLines.push('Must be quick to prepare or order (under 15 minutes)')
+  if (filters?.budget) filterLines.push('Must be budget-friendly')
+  if (filters?.vegetarian) filterLines.push('Must be vegetarian (no meat, poultry, or fish)')
+  if (filters?.highProtein) filterLines.push('Prioritize high-protein options')
+  if (filters?.lowCarb) filterLines.push('Prioritize low-carb options')
+  const filterSection = filterLines.length > 0 ? `\nCONSTRAINTS:\n${filterLines.join('\n')}\n` : ''
+
   let contextInstruction
   if (isUrl) {
     contextInstruction = `CONTEXT: The user provided this link: "${context}". This is likely a Google Maps or restaurant page URL. Search the web for this restaurant's menu. Find the actual restaurant name and their real menu items. Suggest specific dishes from their actual menu with realistic portion sizes and nutritional estimates.`
   } else if (hasContext) {
-    contextInstruction = `CONTEXT: The user wants to eat at/from: "${context}". Search the web for this restaurant or food place's actual menu. Suggest specific real menu items with realistic portions and nutritional values. If it's a local restaurant, try to find their actual dishes and prices. Be specific — use real dish names from their menu, not generic food.`
+    contextInstruction = `CONTEXT: "${context}".
+Interpret this intelligently:
+- If it's a restaurant or food place name (e.g. "Chipotle", "Urban Biryanis"), search the web for their actual menu and suggest specific real menu items.
+- If it describes a craving (e.g. "pizza", "something sweet", "biryani"), work WITH the craving — suggest the best version of what they want plus sides that fill nutrient gaps. Don't fight the craving, optimize around it.
+- If it lists available ingredients (e.g. "chicken, rice, eggs, spinach"), suggest specific recipes using those ingredients with exact quantities to fill gaps.
+- If it describes a situation (e.g. "airport", "vending machine", "hotel breakfast buffet"), suggest the best options typically available in that setting.`
   } else {
     contextInstruction = `USER'S FOOD HISTORY:\n${libraryLines || '(no history yet)'}\n\nPrefer suggesting from these familiar foods when possible. You can also suggest other common foods if needed to fill nutrient gaps.`
   }
@@ -361,7 +376,7 @@ Protein: ${remaining.protein}g | Carbs: ${remaining.carbs}g | Fat: ${remaining.f
 
 BIGGEST NUTRIENT GAPS TO PRIORITIZE:
 ${gapLines}
-
+${filterSection}
 ${contextInstruction}
 
 Suggest 2-4 food items with specific quantities that together best cover the remaining calories AND nutrient gaps. Return JSON only:
@@ -375,12 +390,17 @@ Suggest 2-4 food items with specific quantities that together best cover the rem
   })
 }
 
-export async function suggestFromMenuPhoto(keys, imageBase64, { remaining, gaps }) {
+// Multi-image support: menu photos (buffet stations, multi-page menus) or fridge/pantry photos
+export async function suggestFromPhotos(keys, images, mode, { remaining, gaps }) {
   const gapLines = gaps.slice(0, 8).map((g) =>
     `${g.label}: need ${g.remaining}${g.unit} more (${g.pct}% of daily target still missing)`
   ).join('\n')
 
-  const prompt = `You are a sports nutrition coach. The user photographed a restaurant/cruise/cafeteria menu. Read ALL the menu items from this photo, then suggest the best items to order based on their remaining nutritional needs.
+  const modeInstruction = mode === 'fridge'
+    ? `The user photographed their fridge, pantry, or available ingredients (${images.length} photo(s)). Identify ALL food items and ingredients visible across all photos. Then suggest 2-4 meals or recipes they can make from these ingredients that best fill their remaining nutrient gaps. Include specific quantities and brief cooking method.`
+    : `The user photographed a restaurant, buffet, or cafeteria menu (${images.length} photo(s) — they may have photographed different sections, stations, or pages). Read ALL menu items visible across ALL photos. Then pick 2-4 items that best fill the remaining calorie and nutrient gaps. For each suggestion, estimate realistic nutritional values for a standard portion.`
+
+  const prompt = `You are a sports nutrition coach.
 
 REMAINING TARGETS TO HIT:
 Calories: ${remaining.calories} kcal
@@ -389,22 +409,65 @@ Protein: ${remaining.protein}g | Carbs: ${remaining.carbs}g | Fat: ${remaining.f
 BIGGEST NUTRIENT GAPS TO PRIORITIZE:
 ${gapLines}
 
-Read every item visible on this menu photo. Then pick 2-4 items that best fill the remaining calorie and nutrient gaps. For each suggestion, estimate realistic nutritional values for a standard restaurant portion. Return JSON only:
-{"menuName":"str (restaurant/venue name if visible, else 'Menu')","suggestions":[{"name":"str (exact dish name from the menu)","quantity":"str (e.g. '1 plate','1 bowl','half portion')","servingWeightG":num_or_null,"nutrients":{"calories":num,"protein":num,"carbs":num,"fat":num,"saturatedFat":num_or_null,"transFat":num_or_null,"fiber":num_or_null,"sugar":num_or_null,"sodium":num_or_null,"cholesterol":num_or_null,"potassium":num_or_null,"calcium":num_or_null,"iron":num_or_null,"vitaminA":num_or_null,"vitaminC":num_or_null,"vitaminD":num_or_null,"vitaminB12":num_or_null,"zinc":num_or_null,"magnesium":num_or_null,"omega3":num_or_null},"reasoning":"1 sentence: why this dish and which gaps it fills"}],"summary":"1 sentence overall strategy"}`
+${modeInstruction}
+
+Return JSON only:
+{"menuName":"str (restaurant name if visible, or 'Fridge' / 'Menu')","suggestions":[{"name":"str","quantity":"str (e.g. '1 plate','200g','2 eggs + 100g rice')","servingWeightG":num_or_null,"nutrients":{"calories":num,"protein":num,"carbs":num,"fat":num,"saturatedFat":num_or_null,"transFat":num_or_null,"fiber":num_or_null,"sugar":num_or_null,"sodium":num_or_null,"cholesterol":num_or_null,"potassium":num_or_null,"calcium":num_or_null,"iron":num_or_null,"vitaminA":num_or_null,"vitaminC":num_or_null,"vitaminD":num_or_null,"vitaminB12":num_or_null,"zinc":num_or_null,"magnesium":num_or_null,"omega3":num_or_null},"reasoning":"1 sentence: why this and which gaps it fills"}],"summary":"1 sentence overall strategy"}`
 
   return runWithFallback(VISION_CHAIN, keys, (provider) => {
     if (provider === 'gemini') {
-      return { prompt, imageBase64 }
+      return { prompt, images }
     }
     return {
       messages: [{
         role: 'user',
         content: [
           { type: 'text', text: prompt },
-          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
+          ...images.map((img) => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${img}` } })),
         ],
       }],
     }
+  })
+}
+
+// Plan all remaining meals for the day
+export async function suggestFullDayPlan(keys, { remaining, gaps, foodLibrary, mealsLeft, filters }) {
+  const gapLines = gaps.slice(0, 10).map((g) =>
+    `${g.label}: need ${g.remaining}${g.unit} more (${g.pct}% of daily target still missing)`
+  ).join('\n')
+
+  const libraryLines = foodLibrary.slice(0, 25).map((f) =>
+    `${f.name}: ${f.calories}cal, P:${f.protein}g, C:${f.carbs}g, F:${f.fat}g per ${f.serving}`
+  ).join('\n')
+
+  const filterLines = []
+  if (filters?.quick) filterLines.push('Meals should be quick to prepare (under 15 minutes each)')
+  if (filters?.budget) filterLines.push('Keep it budget-friendly')
+  if (filters?.vegetarian) filterLines.push('All meals must be vegetarian')
+  if (filters?.highProtein) filterLines.push('Prioritize high-protein in every meal')
+  if (filters?.lowCarb) filterLines.push('Keep all meals low-carb')
+  const filterSection = filterLines.length > 0 ? `\nCONSTRAINTS:\n${filterLines.join('\n')}\n` : ''
+
+  const prompt = `You are a sports nutrition coach planning the user's remaining meals for today.
+
+REMAINING TARGETS TO DISTRIBUTE ACROSS ALL REMAINING MEALS:
+Calories: ${remaining.calories} kcal
+Protein: ${remaining.protein}g | Carbs: ${remaining.carbs}g | Fat: ${remaining.fat}g
+
+BIGGEST NUTRIENT GAPS TO PRIORITIZE:
+${gapLines}
+${filterSection}
+MEALS STILL TO PLAN: ${mealsLeft.join(', ')}
+
+USER'S FOOD HISTORY:
+${libraryLines || '(no history yet)'}
+
+Distribute the remaining calories and nutrients optimally across ${mealsLeft.length} meal(s). Suggest 1-3 items per meal. Use the user's familiar foods when possible. Return JSON only:
+{"meals":{${mealsLeft.map((m) => `"${m}":[{"name":"str","quantity":"str","servingWeightG":num_or_null,"nutrients":{"calories":num,"protein":num,"carbs":num,"fat":num,"fiber":num_or_null,"sodium":num_or_null},"reasoning":"str"}]`).join(',')}},"summary":"1 sentence overall day strategy"}`
+
+  return runWithFallback(TEXT_CHAIN, keys, (provider) => {
+    if (provider === 'gemini') return { prompt }
+    return { messages: [{ role: 'user', content: prompt }] }
   })
 }
 
