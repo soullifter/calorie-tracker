@@ -16,6 +16,15 @@ const TEXT_CHAIN = [
   { provider: 'gemini', model: 'gemini-3.5-flash-lite' },
 ]
 
+// Web-search-capable chain for restaurant menus, real-world lookups
+const SEARCH_CHAIN = [
+  { provider: 'gemini-search', model: 'gemini-2.0-flash' },
+  { provider: 'groq-search', model: 'compound-beta-mini' },
+  // Fallback to regular text (will guess based on name, less accurate)
+  { provider: 'groq', model: 'llama-3.1-8b-instant' },
+  { provider: 'gemini', model: 'gemini-3.5-flash-lite' },
+]
+
 // --- Gemini ---
 async function callGemini(apiKey, model, prompt, imageBase64 = null) {
   const parts = [{ text: prompt }]
@@ -46,6 +55,62 @@ async function callGemini(apiKey, model, prompt, imageBase64 = null) {
   const data = await res.json()
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
   return extractJson(text)
+}
+
+// --- Gemini with Google Search grounding ---
+async function callGeminiSearch(apiKey, model, prompt) {
+  const url = `${GEMINI_API_URL}/${model}:generateContent?key=${apiKey}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      tools: [{ google_search: {} }],
+      generationConfig: { temperature: 0.1 },
+    }),
+  })
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    const msg = err.error?.message || `Gemini search error: ${res.status}`
+    const isRateLimit = res.status === 429 || msg.includes('quota') || msg.includes('rate')
+    throw Object.assign(new Error(msg), { isRateLimit })
+  }
+
+  const data = await res.json()
+  const text = (data.candidates?.[0]?.content?.parts || []).map((p) => p.text).filter(Boolean).join('')
+  return extractJson(text)
+}
+
+// --- Groq (compound models with built-in web search) ---
+async function callGroqSearch(apiKey, model, messages) {
+  const res = await fetch(GROQ_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: 0.1,
+      max_tokens: 8192,
+    }),
+  })
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    if (err.error?.failed_generation) {
+      try { return extractJson(err.error.failed_generation) } catch { /* fall through */ }
+    }
+    const msg = err.error?.message || `Groq search error: ${res.status}`
+    const isRateLimit = res.status === 429 || msg.includes('rate') || msg.includes('limit')
+    throw Object.assign(new Error(msg), { isRateLimit })
+  }
+
+  const data = await res.json()
+  const content = data.choices?.[0]?.message?.content || ''
+  return extractJson(content)
 }
 
 // --- Groq ---
@@ -105,12 +170,17 @@ async function runWithFallback(chain, keys, buildRequest) {
   const errors = []
 
   for (const { provider, model } of chain) {
-    const apiKey = provider === 'gemini' ? keys.geminiKey : keys.groqKey
+    const isGemini = provider === 'gemini' || provider === 'gemini-search'
+    const apiKey = isGemini ? keys.geminiKey : keys.groqKey
     if (!apiKey) continue
 
     try {
       const req = buildRequest(provider, model)
-      if (provider === 'gemini') {
+      if (provider === 'gemini-search') {
+        return await callGeminiSearch(apiKey, model, req.prompt)
+      } else if (provider === 'groq-search') {
+        return await callGroqSearch(apiKey, model, req.messages)
+      } else if (provider === 'gemini') {
         return await callGemini(apiKey, model, req.prompt, req.imageBase64)
       } else {
         return await callGroq(apiKey, model, req.messages)
@@ -265,11 +335,23 @@ export async function suggestMeals(keys, { remaining, gaps, foodLibrary, context
     `${g.label}: need ${g.remaining}${g.unit} more (${g.pct}% of daily target still missing)`
   ).join('\n')
 
-  const libraryLines = !context && foodLibrary.length > 0
+  const hasContext = !!context
+  const isUrl = hasContext && /https?:\/\//.test(context)
+
+  const libraryLines = !hasContext && foodLibrary.length > 0
     ? foodLibrary.slice(0, 25).map((f) =>
         `${f.name}: ${f.calories}cal, P:${f.protein}g, C:${f.carbs}g, F:${f.fat}g per ${f.serving}`
       ).join('\n')
     : ''
+
+  let contextInstruction
+  if (isUrl) {
+    contextInstruction = `CONTEXT: The user provided this link: "${context}". This is likely a Google Maps or restaurant page URL. Search the web for this restaurant's menu. Find the actual restaurant name and their real menu items. Suggest specific dishes from their actual menu with realistic portion sizes and nutritional estimates.`
+  } else if (hasContext) {
+    contextInstruction = `CONTEXT: The user wants to eat at/from: "${context}". Search the web for this restaurant or food place's actual menu. Suggest specific real menu items with realistic portions and nutritional values. If it's a local restaurant, try to find their actual dishes and prices. Be specific — use real dish names from their menu, not generic food.`
+  } else {
+    contextInstruction = `USER'S FOOD HISTORY:\n${libraryLines || '(no history yet)'}\n\nPrefer suggesting from these familiar foods when possible. You can also suggest other common foods if needed to fill nutrient gaps.`
+  }
 
   const prompt = `You are a sports nutrition coach. The user has already eaten today and needs to cover remaining nutritional gaps with their next meal(s).
 
@@ -280,15 +362,15 @@ Protein: ${remaining.protein}g | Carbs: ${remaining.carbs}g | Fat: ${remaining.f
 BIGGEST NUTRIENT GAPS TO PRIORITIZE:
 ${gapLines}
 
-${context
-  ? `CONTEXT: The user wants to eat at/from: "${context}". Suggest specific menu items from this place with realistic portions and nutritional values based on your knowledge of their menu. Use real menu items and realistic portion sizes.`
-  : `USER'S FOOD HISTORY:\n${libraryLines || '(no history yet)'}\n\nPrefer suggesting from these familiar foods when possible. You can also suggest other common foods if needed to fill nutrient gaps.`}
+${contextInstruction}
 
 Suggest 2-4 food items with specific quantities that together best cover the remaining calories AND nutrient gaps. Return JSON only:
 {"suggestions":[{"name":"str","quantity":"str (e.g. '1 bowl','200g','2 scoops')","servingWeightG":num_or_null,"nutrients":{"calories":num,"protein":num,"carbs":num,"fat":num,"saturatedFat":num_or_null,"transFat":num_or_null,"fiber":num_or_null,"sugar":num_or_null,"sodium":num_or_null,"cholesterol":num_or_null,"potassium":num_or_null,"calcium":num_or_null,"iron":num_or_null,"vitaminA":num_or_null,"vitaminC":num_or_null,"vitaminD":num_or_null,"vitaminB12":num_or_null,"zinc":num_or_null,"magnesium":num_or_null,"omega3":num_or_null},"reasoning":"1 sentence: why this food and which gaps it fills"}],"summary":"1 sentence overall strategy"}`
 
-  return runWithFallback(TEXT_CHAIN, keys, (provider) => {
-    if (provider === 'gemini') return { prompt }
+  const chain = hasContext ? SEARCH_CHAIN : TEXT_CHAIN
+
+  return runWithFallback(chain, keys, (provider) => {
+    if (provider === 'gemini' || provider === 'gemini-search') return { prompt }
     return { messages: [{ role: 'user', content: prompt }] }
   })
 }
