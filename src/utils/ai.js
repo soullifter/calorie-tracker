@@ -375,6 +375,39 @@ Suggest 2-4 food items with specific quantities that together best cover the rem
   })
 }
 
+export async function suggestFromMenuPhoto(keys, imageBase64, { remaining, gaps }) {
+  const gapLines = gaps.slice(0, 8).map((g) =>
+    `${g.label}: need ${g.remaining}${g.unit} more (${g.pct}% of daily target still missing)`
+  ).join('\n')
+
+  const prompt = `You are a sports nutrition coach. The user photographed a restaurant/cruise/cafeteria menu. Read ALL the menu items from this photo, then suggest the best items to order based on their remaining nutritional needs.
+
+REMAINING TARGETS TO HIT:
+Calories: ${remaining.calories} kcal
+Protein: ${remaining.protein}g | Carbs: ${remaining.carbs}g | Fat: ${remaining.fat}g
+
+BIGGEST NUTRIENT GAPS TO PRIORITIZE:
+${gapLines}
+
+Read every item visible on this menu photo. Then pick 2-4 items that best fill the remaining calorie and nutrient gaps. For each suggestion, estimate realistic nutritional values for a standard restaurant portion. Return JSON only:
+{"menuName":"str (restaurant/venue name if visible, else 'Menu')","suggestions":[{"name":"str (exact dish name from the menu)","quantity":"str (e.g. '1 plate','1 bowl','half portion')","servingWeightG":num_or_null,"nutrients":{"calories":num,"protein":num,"carbs":num,"fat":num,"saturatedFat":num_or_null,"transFat":num_or_null,"fiber":num_or_null,"sugar":num_or_null,"sodium":num_or_null,"cholesterol":num_or_null,"potassium":num_or_null,"calcium":num_or_null,"iron":num_or_null,"vitaminA":num_or_null,"vitaminC":num_or_null,"vitaminD":num_or_null,"vitaminB12":num_or_null,"zinc":num_or_null,"magnesium":num_or_null,"omega3":num_or_null},"reasoning":"1 sentence: why this dish and which gaps it fills"}],"summary":"1 sentence overall strategy"}`
+
+  return runWithFallback(VISION_CHAIN, keys, (provider) => {
+    if (provider === 'gemini') {
+      return { prompt, imageBase64 }
+    }
+    return {
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
+        ],
+      }],
+    }
+  })
+}
+
 export async function describeExercise(keys, description, weightKg) {
   const prompt = `The user describes an activity: "${description}". Identify what exercise/activity this is, then return JSON with all possible exercises matching their description, grouped by muscle group:
 {"equipment":"str (what they described)","isCardio":bool,"muscleGroupOptions":[{"group":"str","exercises":[{"name":"str","fields":[{"key":"str","label":"str","type":"number|select","unit":"str_or_null","options":["str"]_or_null,"default":num_or_null}]}]}]}

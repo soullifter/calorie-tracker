@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { MEAL_LABELS, MEAL_TYPES, NUTRIENTS, getDailyRDA } from '../utils/constants'
 import { getDateKey, sumNutrients } from '../utils/calculations'
 import { getDayLog, saveDayLog, getFoodLibrary } from '../utils/storage'
-import { suggestMeals } from '../utils/ai'
+import { suggestMeals, suggestFromMenuPhoto } from '../utils/ai'
 import CalorieRing from './CalorieRing'
 import MacroBar from './MacroBar'
 import NutrientDetails from './NutrientDetails'
@@ -168,6 +168,58 @@ export default function Dashboard({ profile, onOpenSettings, initialDate, onBack
     handleAddFood(suggestAddedMeal, entry)
   }
 
+  const compressImage = (file, maxDim = 768, quality = 0.6) =>
+    new Promise((resolve) => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        let { width, height } = img
+        if (width > maxDim || height > maxDim) {
+          const ratio = Math.min(maxDim / width, maxDim / height)
+          width = Math.round(width * ratio)
+          height = Math.round(height * ratio)
+        }
+        canvas.width = width
+        canvas.height = height
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height)
+        resolve(canvas.toDataURL('image/jpeg', quality).split(',')[1])
+        URL.revokeObjectURL(img.src)
+      }
+      img.src = URL.createObjectURL(file)
+    })
+
+  const handleMenuPhoto = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setSuggestLoading(true)
+    setSuggestError('')
+    try {
+      const base64 = await compressImage(file)
+
+      const rda = getDailyRDA(profile.gender, profile.targets.calories)
+      const targets = { calories: profile.targets.calories, protein: profile.targets.protein, carbs: profile.targets.carbs, fat: profile.targets.fat, ...rda }
+      const remaining = {}
+      const gaps = []
+      for (const n of NUTRIENTS) {
+        const target = targets[n.key]
+        if (!target) continue
+        const consumed = totals[n.key] || 0
+        const left = Math.max(0, Math.round((target - consumed) * 10) / 10)
+        remaining[n.key] = left
+        if (left > 0) gaps.push({ key: n.key, label: n.label, remaining: left, unit: n.unit, pct: Math.round((left / target) * 100) })
+      }
+      gaps.sort((a, b) => b.pct - a.pct)
+
+      const keys = { geminiKey: profile.geminiApiKey, groqKey: profile.groqApiKey }
+      const result = await suggestFromMenuPhoto(keys, base64, { remaining, gaps })
+      setSuggestions(result)
+    } catch (err) {
+      setSuggestError(err.message || 'Failed to read menu')
+    } finally {
+      setSuggestLoading(false)
+    }
+  }
+
   const isToday = dateKey === getDateKey()
   const displayDate = new Date(dateKey + 'T12:00:00')
   const greeting = isToday
@@ -290,29 +342,39 @@ export default function Dashboard({ profile, onOpenSettings, initialDate, onBack
                     type="text"
                     value={suggestContext}
                     onChange={(e) => setSuggestContext(e.target.value)}
-                    placeholder="Restaurant, cuisine, or leave empty for history-based..."
+                    placeholder="Restaurant, cuisine, Google Maps link, or leave empty..."
                     className="w-full p-3 rounded-xl bg-surface-3 text-white text-sm placeholder-gray-600 border border-white/5 focus:outline-none focus:border-indigo-500/50"
                   />
                 </div>
 
-                <button
-                  onClick={handleGetSuggestions}
-                  disabled={suggestLoading}
-                  className="w-full py-3 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-500 transition disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {suggestLoading ? (
-                    <>
-                      <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="30 70" strokeLinecap="round" /></svg>
-                      Analyzing your gaps...
-                    </>
-                  ) : 'Get Suggestions'}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleGetSuggestions}
+                    disabled={suggestLoading}
+                    className="flex-1 py-3 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-500 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {suggestLoading ? (
+                      <>
+                        <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="30 70" strokeLinecap="round" /></svg>
+                        Analyzing...
+                      </>
+                    ) : 'Get Suggestions'}
+                  </button>
+                  <label className={`py-3 px-4 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-500 transition flex items-center justify-center gap-1.5 cursor-pointer ${suggestLoading ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    Scan Menu
+                    <input type="file" accept="image/*" capture="environment" onChange={handleMenuPhoto} className="hidden" />
+                  </label>
+                </div>
 
                 {suggestError && <p className="text-red-400 text-xs">{suggestError}</p>}
 
                 {/* Results */}
                 {suggestions && (
                   <div className="space-y-3">
+                    {suggestions.menuName && (
+                      <p className="text-xs text-white font-medium">{suggestions.menuName}</p>
+                    )}
                     {suggestions.summary && (
                       <p className="text-xs text-gray-400 italic">{suggestions.summary}</p>
                     )}
